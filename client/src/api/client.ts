@@ -70,8 +70,8 @@ export function register(username: string, password: string, displayName: string
   return post<{ user: User }>('/auth/register', {
     username,
     password,
-    display_name: displayName,
-    invite_code: inviteCode,
+    displayName,
+    inviteCode,
   });
 }
 
