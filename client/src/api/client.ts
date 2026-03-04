@@ -88,11 +88,11 @@ export function getMe() {
 /* ------------------------------------------------------------------ */
 
 export function getDrivers() {
-  return get<F1Driver[]>('/drivers');
+  return get<{ drivers: F1Driver[] }>('/drivers').then(r => r.drivers);
 }
 
 export function getDriver(id: number) {
-  return get<F1Driver>(`/drivers/${id}`);
+  return get<{ driver: F1Driver; priceHistory: unknown[] }>(`/drivers/${id}`).then(r => r.driver);
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,19 +100,19 @@ export function getDriver(id: number) {
 /* ------------------------------------------------------------------ */
 
 export function getRaces() {
-  return get<F1Race[]>('/races');
+  return get<{ races: F1Race[] }>('/races').then(r => r.races);
 }
 
 export function getNextRace() {
-  return get<F1Race>('/races/next');
+  return get<{ race: F1Race | null }>('/races/next').then(r => r.race);
 }
 
 export function getRace(id: number) {
-  return get<F1Race & { results?: F1RaceResult[] }>(`/races/${id}`);
+  return get<{ race: F1Race; results: F1RaceResult[] }>(`/races/${id}`).then(r => ({ ...r.race, results: r.results }));
 }
 
 export function getRaceScores(raceId: number) {
-  return get<RaceScore[]>(`/races/${raceId}/scores`);
+  return get<{ scores: RaceScore[] }>(`/races/${raceId}/scores`).then(r => r.scores);
 }
 
 /* ------------------------------------------------------------------ */
@@ -120,7 +120,7 @@ export function getRaceScores(raceId: number) {
 /* ------------------------------------------------------------------ */
 
 export function getMyTeam() {
-  return get<{ team: UserTeamEntry[]; budget: number }>('/teams/me');
+  return get<{ team: UserTeamEntry[]; budget: number }>('/teams/my');
 }
 
 export function updateTeam(driverInId: string, driverOutId: string | null) {
@@ -135,7 +135,7 @@ export function getPlayerTeam(userId: number) {
 }
 
 export function getTransferLog() {
-  return get<Transfer[]>('/teams/transfers');
+  return get<{ transfers: Transfer[] }>('/teams/transfers/log').then(r => r.transfers);
 }
 
 export function getRemainingTransfers() {
@@ -150,19 +150,19 @@ export function submitPicks(
   raceId: number,
   picksList: Array<{ pick_type: string; pick_value: string }>,
 ) {
-  return post<WeeklyPick[]>('/picks', { race_id: raceId, picks: picksList });
+  return post<{ picks: WeeklyPick[] }>('/picks', { race_id: raceId, picks: picksList }).then(r => r.picks);
 }
 
 export function getMyPicks(raceId: number) {
-  return get<WeeklyPick[]>(`/picks/me?race_id=${raceId}`);
+  return get<{ picks: Record<string, any>; raw: WeeklyPick[] }>(`/picks/${raceId}`).then(r => r.raw);
 }
 
 export function getAllPicks(raceId: number) {
-  return get<Record<string, WeeklyPick[]>>(`/picks/all?race_id=${raceId}`);
+  return get<{ picks: Record<string, any> }>(`/picks/${raceId}/all`).then(r => r.picks);
 }
 
 export function getMatchups(raceId: number) {
-  return get<H2HMatchup[]>(`/picks/matchups?race_id=${raceId}`);
+  return get<{ matchups: H2HMatchup[] }>(`/picks/${raceId}/matchups`).then(r => r.matchups);
 }
 
 /* ------------------------------------------------------------------ */
@@ -170,15 +170,15 @@ export function getMatchups(raceId: number) {
 /* ------------------------------------------------------------------ */
 
 export function getStandings() {
-  return get<StandingsEntry[]>('/standings');
+  return get<{ standings: StandingsEntry[] }>('/league/standings').then(r => r.standings);
 }
 
 export function getStandingsByRace(raceId: number) {
-  return get<RaceScore[]>(`/standings/race/${raceId}`);
+  return get<{ standings: RaceScore[] }>(`/league/standings/${raceId}`).then(r => r.standings);
 }
 
 export function getSettings() {
-  return get<Record<string, string>>('/settings');
+  return get<{ settings: Record<string, string> }>('/league/settings').then(r => r.settings);
 }
 
 /* ------------------------------------------------------------------ */

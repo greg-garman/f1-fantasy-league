@@ -93,18 +93,36 @@ export async function syncSeasonData(): Promise<void> {
   upsertRaces();
   console.log(`Synced ${races.length} races.`);
 
-  // Fetch drivers
-  const driverData = await fetchJson(`${API_BASE}/${SEASON}/drivers.json`);
-  const drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
-
-  // Group drivers by constructor to assign prices
+  // Fetch drivers via driverStandings (includes constructor info)
+  let drivers: any[] = [];
   const constructorDrivers: Record<string, any[]> = {};
-  for (const driver of drivers) {
-    const constructorName = driver.Constructors?.[0]?.name ?? 'Unknown';
-    if (!constructorDrivers[constructorName]) {
-      constructorDrivers[constructorName] = [];
+
+  try {
+    const standingsData = await fetchJson(`${API_BASE}/${SEASON}/driverStandings.json`);
+    const standingsList = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
+
+    for (const entry of standingsList) {
+      const driver = entry.Driver;
+      driver.Constructors = entry.Constructors;
+      drivers.push(driver);
+      const constructorName = entry.Constructors?.[0]?.name ?? 'Unknown';
+      if (!constructorDrivers[constructorName]) {
+        constructorDrivers[constructorName] = [];
+      }
+      constructorDrivers[constructorName].push(driver);
     }
-    constructorDrivers[constructorName].push(driver);
+  } catch {
+    // Fallback to drivers endpoint if standings not yet available (pre-season)
+    const driverData = await fetchJson(`${API_BASE}/${SEASON}/drivers.json`);
+    drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
+
+    for (const driver of drivers) {
+      const constructorName = driver.Constructors?.[0]?.name ?? 'Unknown';
+      if (!constructorDrivers[constructorName]) {
+        constructorDrivers[constructorName] = [];
+      }
+      constructorDrivers[constructorName].push(driver);
+    }
   }
 
   const upsertDriver = db.prepare(`
@@ -118,6 +136,8 @@ export async function syncSeasonData(): Promise<void> {
       constructor_name = excluded.constructor_name,
       nationality = excluded.nationality,
       number = excluded.number,
+      current_price = excluded.current_price,
+      initial_price = excluded.initial_price,
       is_active = 1
   `);
 
