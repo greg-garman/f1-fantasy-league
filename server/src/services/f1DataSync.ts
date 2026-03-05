@@ -127,7 +127,9 @@ export async function syncSeasonData(): Promise<void> {
           quali_time = excluded.quali_time,
           sprint_date = excluded.sprint_date,
           fp1_date = excluded.fp1_date,
-          has_sprint = excluded.has_sprint
+          has_sprint = excluded.has_sprint,
+          status = 'upcoming',
+          picks_locked = 0
       `, [
         SEASON,
         round,
