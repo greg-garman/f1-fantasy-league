@@ -101,6 +101,10 @@ export async function syncSeasonData(): Promise<void> {
     const standingsData = await fetchJson(`${API_BASE}/${SEASON}/driverStandings.json`);
     const standingsList = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
 
+    if (standingsList.length === 0) {
+      throw new Error('Empty standings list, falling back to drivers endpoint');
+    }
+
     for (const entry of standingsList) {
       const driver = entry.Driver;
       driver.Constructors = entry.Constructors;
@@ -112,16 +116,54 @@ export async function syncSeasonData(): Promise<void> {
       constructorDrivers[constructorName].push(driver);
     }
   } catch {
-    // Fallback to drivers endpoint if standings not yet available (pre-season)
-    const driverData = await fetchJson(`${API_BASE}/${SEASON}/drivers.json`);
-    drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
+    // Fallback: fetch drivers and constructors separately, then match them up
+    try {
+      const [driverData, constructorData] = await Promise.all([
+        fetchJson(`${API_BASE}/${SEASON}/drivers.json`),
+        fetchJson(`${API_BASE}/${SEASON}/constructors.json`),
+      ]);
+      drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
+      const constructorsList = constructorData?.MRData?.ConstructorTable?.Constructors ?? [];
 
-    for (const driver of drivers) {
-      const constructorName = driver.Constructors?.[0]?.name ?? 'Unknown';
-      if (!constructorDrivers[constructorName]) {
-        constructorDrivers[constructorName] = [];
+      // Fetch drivers per constructor to get the mapping
+      const constructorMap: Record<string, string> = {};
+      for (const constructor of constructorsList) {
+        try {
+          const cdData = await fetchJson(
+            `${API_BASE}/${SEASON}/constructors/${constructor.constructorId}/drivers.json`
+          );
+          const cDrivers = cdData?.MRData?.DriverTable?.Drivers ?? [];
+          for (const cd of cDrivers) {
+            constructorMap[cd.driverId] = constructor.name;
+          }
+        } catch {
+          // Skip if constructor-driver mapping fails
+        }
       }
-      constructorDrivers[constructorName].push(driver);
+
+      for (const driver of drivers) {
+        const constructorName = constructorMap[driver.driverId] ?? driver.Constructors?.[0]?.name ?? 'Unknown';
+        const constructorId = constructorsList.find(
+          (c: any) => c.name === constructorName
+        )?.constructorId ?? 'unknown';
+        driver.Constructors = [{ constructorId, name: constructorName }];
+        if (!constructorDrivers[constructorName]) {
+          constructorDrivers[constructorName] = [];
+        }
+        constructorDrivers[constructorName].push(driver);
+      }
+    } catch {
+      // Last resort: fetch just drivers without constructor info
+      const driverData = await fetchJson(`${API_BASE}/${SEASON}/drivers.json`);
+      drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
+
+      for (const driver of drivers) {
+        const constructorName = driver.Constructors?.[0]?.name ?? 'Unknown';
+        if (!constructorDrivers[constructorName]) {
+          constructorDrivers[constructorName] = [];
+        }
+        constructorDrivers[constructorName].push(driver);
+      }
     }
   }
 
@@ -140,6 +182,11 @@ export async function syncSeasonData(): Promise<void> {
       initial_price = excluded.initial_price,
       is_active = 1
   `);
+
+  if (drivers.length === 0) {
+    console.log('No drivers fetched from API, skipping driver sync to preserve existing data.');
+    return;
+  }
 
   const upsertDrivers = db.transaction(() => {
     // Mark all drivers as inactive first, then re-activate the ones in the API
