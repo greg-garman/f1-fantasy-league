@@ -14,7 +14,6 @@ export default function MyTeamPage() {
   const [allDrivers, setAllDrivers] = useState<F1Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [isPreSeason, setIsPreSeason] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
 
   /* transfer modal state */
@@ -38,7 +37,6 @@ export default function MyTeamPage() {
         setBudget(t.budget);
         setAllDrivers(d);
         setRemaining(r.remaining);
-        if ('isPreSeason' in r) setIsPreSeason(!!r.isPreSeason);
       } catch {
         /* ignore */
       } finally {
@@ -159,7 +157,7 @@ export default function MyTeamPage() {
                   <span className="driver-card__code">{d?.code || ''}</span>
                 </div>
               </div>
-              {isPreSeason && (
+              {remaining !== null && remaining >= 999 && (
                 <button
                   className="btn btn--danger btn--small"
                   style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}
