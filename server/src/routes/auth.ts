@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute, executeReturning } from '../db/connection.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { User } from '../types/index.js';
+import { config } from '../config.js';
 
 const router = Router();
 
@@ -36,9 +37,13 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const passwordHash = bcrypt.hashSync(password, 10);
   const isAdmin = (userCount!.count === 0 || username === 'Greg-G') ? 1 : 0;
 
+  // Use budget_cap from league_settings if available, otherwise config default
+  const budgetSetting = await queryOne<{ value: string }>("SELECT value FROM league_settings WHERE key = 'budget_cap'");
+  const budgetCap = budgetSetting ? parseFloat(budgetSetting.value) : config.budgetCap;
+
   const inserted = await executeReturning<{ id: number }>(
-    'INSERT INTO users (username, display_name, password_hash, is_admin) VALUES ($1, $2, $3, $4) RETURNING id',
-    [username, displayName, passwordHash, isAdmin]
+    'INSERT INTO users (username, display_name, password_hash, is_admin, budget) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [username, displayName, passwordHash, isAdmin, budgetCap]
   );
 
   const sessionId = uuidv4();
@@ -58,7 +63,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       username,
       display_name: displayName,
       is_admin: isAdmin,
-      budget: 100.0,
+      budget: budgetCap,
     },
   });
 });

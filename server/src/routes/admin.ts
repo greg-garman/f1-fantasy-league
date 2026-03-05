@@ -7,6 +7,7 @@ import { syncRaceResults, syncSeasonData } from '../services/f1DataSync.js';
 import { scoreRace } from '../services/scoring.js';
 import { updatePrices } from '../services/priceEngine.js';
 import { seedDrivers2026 } from '../services/seedDrivers.js';
+import { config } from '../config.js';
 
 const router = Router();
 
@@ -169,6 +170,25 @@ router.put('/league-settings', async (req: Request, res: Response): Promise<void
   if (!key || value === undefined || value === null) {
     res.status(400).json({ error: 'Key and value required' });
     return;
+  }
+
+  // When budget_cap changes, adjust all users' remaining budgets by the difference
+  if (key === 'budget_cap') {
+    const newCap = parseFloat(value);
+    if (isNaN(newCap) || newCap <= 0) {
+      res.status(400).json({ error: 'Budget cap must be a positive number' });
+      return;
+    }
+
+    const oldSetting = await queryOne<{ value: string }>(
+      "SELECT value FROM league_settings WHERE key = 'budget_cap'"
+    );
+    const oldCap = oldSetting ? parseFloat(oldSetting.value) : config.budgetCap;
+    const diff = newCap - oldCap;
+
+    if (diff !== 0) {
+      await execute('UPDATE users SET budget = budget + $1', [diff]);
+    }
   }
 
   await execute(`
