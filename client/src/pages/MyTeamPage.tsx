@@ -142,31 +142,30 @@ export default function MyTeamPage() {
         {team.map((slot) => {
           const d = slot.driver;
           return (
-            <div key={slot.id} className="driver-card" style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openTransferModal(slot)}>
-                <div className="driver-card__info">
-                  <span className="driver-card__name">
-                    {d ? `${d.first_name} ${d.last_name}` : slot.driver_id}
-                  </span>
-                  <span className="driver-card__constructor">{d?.constructor_name || ''}</span>
-                </div>
-                <div className="driver-card__meta">
-                  <span className="driver-card__price">
-                    ${(d?.current_price ?? slot.price_paid).toFixed(1)}M
-                  </span>
-                  <span className="driver-card__code">{d?.code || ''}</span>
-                </div>
+            <div key={slot.id} className="driver-card" onClick={() => openTransferModal(slot)}>
+              <div className="driver-card__info">
+                <span className="driver-card__name">
+                  {d ? `${d.first_name} ${d.last_name}` : slot.driver_id}
+                </span>
+                <span className="driver-card__constructor">{d?.constructor_name || ''}</span>
               </div>
-              {remaining !== null && remaining >= 999 && (
-                <button
-                  className="btn btn--danger btn--small"
-                  style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}
-                  disabled={removing === slot.slot}
-                  onClick={(e) => { e.stopPropagation(); handleRemove(slot); }}
-                >
-                  {removing === slot.slot ? '...' : 'Remove'}
-                </button>
-              )}
+              <div className="driver-card__meta" style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="driver-card__price">
+                  ${(d?.current_price ?? slot.price_paid).toFixed(1)}M
+                </span>
+                <span className="driver-card__code">{d?.code || ''}</span>
+                {remaining !== null && remaining >= 999 && (
+                  <Button
+                    variant="danger"
+                    size="small"
+                    style={{ marginLeft: '0.75rem' }}
+                    disabled={removing === slot.slot}
+                    onClick={(e) => { e.stopPropagation(); handleRemove(slot); }}
+                  >
+                    {removing === slot.slot ? '...' : 'Remove'}
+                  </Button>
+                )}
+              </div>
             </div>
           );
         })}
