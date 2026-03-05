@@ -99,7 +99,7 @@ export default function AdminPage() {
     if (!matchupRaceId || !driverA || !driverB) return;
     setSettingMatchups(true);
     try {
-      const r = await apiSetMatchups(Number(matchupRaceId), [{ driver_a_id: driverA, driver_b_id: driverB }]);
+      const r = await apiSetMatchups(Number(matchupRaceId), [{ driverA, driverB }]);
       showMsg(r.message);
     } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Failed'); }
     setSettingMatchups(false);
