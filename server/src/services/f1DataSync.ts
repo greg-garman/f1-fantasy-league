@@ -49,6 +49,34 @@ function getDriverPrice(constructorName: string, driverIndex: number): number {
   return driverIndex === 0 ? 12 : 10;
 }
 
+// Hardcoded 2026 F1 calendar (used when Ergast has no data for the season)
+const FALLBACK_2026_CALENDAR = [
+  { round: '1', raceName: 'Australian Grand Prix', date: '2026-03-15', time: '05:00:00Z', Circuit: { circuitName: 'Albert Park Grand Prix Circuit', Location: { country: 'Australia' } }, Qualifying: { date: '2026-03-14', time: '06:00:00Z' }, FirstPractice: { date: '2026-03-13' } },
+  { round: '2', raceName: 'Chinese Grand Prix', date: '2026-03-29', time: '07:00:00Z', Circuit: { circuitName: 'Shanghai International Circuit', Location: { country: 'China' } }, Qualifying: { date: '2026-03-28', time: '07:00:00Z' }, Sprint: { date: '2026-03-28' }, FirstPractice: { date: '2026-03-27' } },
+  { round: '3', raceName: 'Japanese Grand Prix', date: '2026-04-12', time: '05:00:00Z', Circuit: { circuitName: 'Suzuka Circuit', Location: { country: 'Japan' } }, Qualifying: { date: '2026-04-11', time: '06:00:00Z' }, FirstPractice: { date: '2026-04-10' } },
+  { round: '4', raceName: 'Bahrain Grand Prix', date: '2026-04-19', time: '15:00:00Z', Circuit: { circuitName: 'Bahrain International Circuit', Location: { country: 'Bahrain' } }, Qualifying: { date: '2026-04-18', time: '15:00:00Z' }, FirstPractice: { date: '2026-04-17' } },
+  { round: '5', raceName: 'Saudi Arabian Grand Prix', date: '2026-04-26', time: '17:00:00Z', Circuit: { circuitName: 'Jeddah Corniche Circuit', Location: { country: 'Saudi Arabia' } }, Qualifying: { date: '2026-04-25', time: '17:00:00Z' }, FirstPractice: { date: '2026-04-24' } },
+  { round: '6', raceName: 'Miami Grand Prix', date: '2026-05-10', time: '20:00:00Z', Circuit: { circuitName: 'Miami International Autodrome', Location: { country: 'USA' } }, Qualifying: { date: '2026-05-09', time: '20:00:00Z' }, Sprint: { date: '2026-05-09' }, FirstPractice: { date: '2026-05-08' } },
+  { round: '7', raceName: 'Emilia Romagna Grand Prix', date: '2026-05-24', time: '13:00:00Z', Circuit: { circuitName: 'Autodromo Enzo e Dino Ferrari', Location: { country: 'Italy' } }, Qualifying: { date: '2026-05-23', time: '14:00:00Z' }, FirstPractice: { date: '2026-05-22' } },
+  { round: '8', raceName: 'Monaco Grand Prix', date: '2026-05-31', time: '13:00:00Z', Circuit: { circuitName: 'Circuit de Monaco', Location: { country: 'Monaco' } }, Qualifying: { date: '2026-05-30', time: '14:00:00Z' }, FirstPractice: { date: '2026-05-29' } },
+  { round: '9', raceName: 'Spanish Grand Prix', date: '2026-06-14', time: '13:00:00Z', Circuit: { circuitName: 'Circuit de Barcelona-Catalunya', Location: { country: 'Spain' } }, Qualifying: { date: '2026-06-13', time: '14:00:00Z' }, FirstPractice: { date: '2026-06-12' } },
+  { round: '10', raceName: 'Canadian Grand Prix', date: '2026-06-28', time: '18:00:00Z', Circuit: { circuitName: 'Circuit Gilles Villeneuve', Location: { country: 'Canada' } }, Qualifying: { date: '2026-06-27', time: '20:00:00Z' }, FirstPractice: { date: '2026-06-26' } },
+  { round: '11', raceName: 'Austrian Grand Prix', date: '2026-07-05', time: '13:00:00Z', Circuit: { circuitName: 'Red Bull Ring', Location: { country: 'Austria' } }, Qualifying: { date: '2026-07-04', time: '14:00:00Z' }, Sprint: { date: '2026-07-04' }, FirstPractice: { date: '2026-07-03' } },
+  { round: '12', raceName: 'British Grand Prix', date: '2026-07-19', time: '14:00:00Z', Circuit: { circuitName: 'Silverstone Circuit', Location: { country: 'UK' } }, Qualifying: { date: '2026-07-18', time: '14:00:00Z' }, FirstPractice: { date: '2026-07-17' } },
+  { round: '13', raceName: 'Belgian Grand Prix', date: '2026-07-26', time: '13:00:00Z', Circuit: { circuitName: 'Circuit de Spa-Francorchamps', Location: { country: 'Belgium' } }, Qualifying: { date: '2026-07-25', time: '14:00:00Z' }, Sprint: { date: '2026-07-25' }, FirstPractice: { date: '2026-07-24' } },
+  { round: '14', raceName: 'Hungarian Grand Prix', date: '2026-08-02', time: '13:00:00Z', Circuit: { circuitName: 'Hungaroring', Location: { country: 'Hungary' } }, Qualifying: { date: '2026-08-01', time: '14:00:00Z' }, FirstPractice: { date: '2026-07-31' } },
+  { round: '15', raceName: 'Dutch Grand Prix', date: '2026-08-30', time: '13:00:00Z', Circuit: { circuitName: 'Circuit Park Zandvoort', Location: { country: 'Netherlands' } }, Qualifying: { date: '2026-08-29', time: '14:00:00Z' }, FirstPractice: { date: '2026-08-28' } },
+  { round: '16', raceName: 'Italian Grand Prix', date: '2026-09-06', time: '13:00:00Z', Circuit: { circuitName: 'Autodromo Nazionale di Monza', Location: { country: 'Italy' } }, Qualifying: { date: '2026-09-05', time: '14:00:00Z' }, FirstPractice: { date: '2026-09-04' } },
+  { round: '17', raceName: 'Azerbaijan Grand Prix', date: '2026-09-20', time: '11:00:00Z', Circuit: { circuitName: 'Baku City Circuit', Location: { country: 'Azerbaijan' } }, Qualifying: { date: '2026-09-19', time: '12:00:00Z' }, FirstPractice: { date: '2026-09-18' } },
+  { round: '18', raceName: 'Singapore Grand Prix', date: '2026-10-04', time: '12:00:00Z', Circuit: { circuitName: 'Marina Bay Street Circuit', Location: { country: 'Singapore' } }, Qualifying: { date: '2026-10-03', time: '13:00:00Z' }, FirstPractice: { date: '2026-10-02' } },
+  { round: '19', raceName: 'United States Grand Prix', date: '2026-10-18', time: '19:00:00Z', Circuit: { circuitName: 'Circuit of the Americas', Location: { country: 'USA' } }, Qualifying: { date: '2026-10-17', time: '22:00:00Z' }, Sprint: { date: '2026-10-17' }, FirstPractice: { date: '2026-10-16' } },
+  { round: '20', raceName: 'Mexico City Grand Prix', date: '2026-10-25', time: '20:00:00Z', Circuit: { circuitName: 'Autodromo Hermanos Rodriguez', Location: { country: 'Mexico' } }, Qualifying: { date: '2026-10-24', time: '21:00:00Z' }, FirstPractice: { date: '2026-10-23' } },
+  { round: '21', raceName: 'Sao Paulo Grand Prix', date: '2026-11-08', time: '17:00:00Z', Circuit: { circuitName: 'Autodromo Jose Carlos Pace', Location: { country: 'Brazil' } }, Qualifying: { date: '2026-11-07', time: '18:00:00Z' }, Sprint: { date: '2026-11-07' }, FirstPractice: { date: '2026-11-06' } },
+  { round: '22', raceName: 'Las Vegas Grand Prix', date: '2026-11-22', time: '06:00:00Z', Circuit: { circuitName: 'Las Vegas Strip Street Circuit', Location: { country: 'USA' } }, Qualifying: { date: '2026-11-21', time: '06:00:00Z' }, FirstPractice: { date: '2026-11-20' } },
+  { round: '23', raceName: 'Qatar Grand Prix', date: '2026-11-29', time: '14:00:00Z', Circuit: { circuitName: 'Lusail International Circuit', Location: { country: 'Qatar' } }, Qualifying: { date: '2026-11-28', time: '16:00:00Z' }, Sprint: { date: '2026-11-28' }, FirstPractice: { date: '2026-11-27' } },
+  { round: '24', raceName: 'Abu Dhabi Grand Prix', date: '2026-12-06', time: '13:00:00Z', Circuit: { circuitName: 'Yas Marina Circuit', Location: { country: 'UAE' } }, Qualifying: { date: '2026-12-05', time: '14:00:00Z' }, FirstPractice: { date: '2026-12-04' } },
+];
+
 async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -61,9 +89,21 @@ export async function syncSeasonData(): Promise<void> {
   const driverSeason = await getDriverSeason();
   console.log(`Syncing season data: races from ${SEASON}, drivers from ${driverSeason}...`);
 
-  // Fetch race calendar
-  const raceData = await fetchJson(`${API_BASE}/${SEASON}.json`);
-  const races = raceData?.MRData?.RaceTable?.Races ?? [];
+  // Fetch race calendar — try API first, fall back to hardcoded 2026 calendar
+  let races: any[] = [];
+  try {
+    const raceData = await fetchJson(`${API_BASE}/${SEASON}.json`);
+    races = raceData?.MRData?.RaceTable?.Races ?? [];
+  } catch (err) {
+    console.log(`API fetch failed for ${SEASON} calendar: ${err}`);
+  }
+
+  if (races.length === 0 && SEASON === 2026) {
+    console.log('Using hardcoded 2026 F1 calendar.');
+    races = FALLBACK_2026_CALENDAR;
+  } else if (races.length === 0) {
+    console.log(`No race calendar data available for ${SEASON}.`);
+  }
 
   await transaction(async (client) => {
     for (const race of races) {
