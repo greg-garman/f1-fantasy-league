@@ -22,7 +22,7 @@ export default function MyTeamPage() {
   const [transferring, setTransferring] = useState(false);
   const [error, setError] = useState('');
   const [filterText, setFilterText] = useState('');
-  const [sortBy, setSortBy] = useState<'price' | 'name'>('price');
+  const [sortBy, setSortBy] = useState<'price' | 'name'>('name');
 
   useEffect(() => {
     async function load() {
@@ -85,7 +85,8 @@ export default function MyTeamPage() {
     setTransferring(true);
     setError('');
     try {
-      const res = await updateTeam(selectedDriver.driver_id, slotToReplace?.driver_id ?? null);
+      const slot = slotToReplace?.slot ?? [1, 2, 3, 4, 5].find((s) => !team.some((t) => t.slot === s))!;
+      const res = await updateTeam(slot, selectedDriver.driver_id);
       setTeam(res.team);
       setBudget(res.budget);
       setModalOpen(false);
