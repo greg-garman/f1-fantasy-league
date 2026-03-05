@@ -202,26 +202,28 @@ export function adjustScore(
   raceId: number,
   adjustment: number,
 ) {
-  return post<{ message: string }>('/admin/adjust-score', {
-    user_id: userId,
-    race_id: raceId,
+  return put<{ message: string }>(`/admin/scores/${raceId}/${userId}`, {
     adjustment,
   });
 }
 
 export function setMatchups(
   raceId: number,
-  matchups: Array<{ driver_a_id: string; driver_b_id: string }>,
+  matchups: Array<{ driverA: string; driverB: string }>,
 ) {
-  return post<{ message: string }>('/admin/matchups', { race_id: raceId, matchups });
+  return post<{ message: string }>(`/admin/matchups/${raceId}`, { matchups });
 }
 
-export function updateSettings(settings: Record<string, string>) {
-  return put<Record<string, string>>('/admin/settings', settings);
+export async function updateSettings(settings: Record<string, string>) {
+  for (const [key, value] of Object.entries(settings)) {
+    await put<{ key: string; value: string }>('/admin/league-settings', { key, value });
+  }
+  // Return the full settings after updating
+  return getSettings();
 }
 
 export function generateInvite() {
-  return post<{ invite_code: string }>('/admin/generate-invite');
+  return post<{ inviteCode: string }>('/admin/invite').then(r => ({ invite_code: r.inviteCode }));
 }
 
 /* default namespace export */
