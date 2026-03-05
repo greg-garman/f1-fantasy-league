@@ -4,6 +4,7 @@ import { getRaces } from '../api/client';
 import type { F1Race } from '../types';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import { formatRaceDate } from '../utils/date';
 
 export default function RaceCalendarPage() {
   const navigate = useNavigate();
@@ -30,10 +31,7 @@ export default function RaceCalendarPage() {
 
       {races.map((race) => {
         const isNext = nextRace && race.id === nextRace.id;
-        const dateStr = new Date(race.race_date).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        });
+        const dateStr = formatRaceDate(race.race_date);
 
         return (
           <div
@@ -49,7 +47,7 @@ export default function RaceCalendarPage() {
                 {race.country ? ` \u00B7 ${race.country}` : ''}
               </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }} className="race-list__badges">
               <span className="race-list__date">{dateStr}</span>
               {race.status === 'completed' ? (
                 <Badge variant="green">Completed</Badge>

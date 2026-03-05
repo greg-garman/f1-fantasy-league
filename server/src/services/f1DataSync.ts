@@ -316,9 +316,15 @@ export async function syncRaceResults(round: number): Promise<void> {
     });
     console.log(`Synced ${qualiResults.length} qualifying results.`);
 
-    // Update race status
+    // Update race status — only if the qualifying date has actually passed
     if (qualiResults.length > 0) {
-      await execute("UPDATE f1_races SET status = 'qualifying', picks_locked = 1 WHERE id = $1", [race.id]);
+      const qualiDateStr = race.quali_date || race.race_date;
+      const qualiDateTime = new Date(qualiDateStr + 'T00:00:00Z');
+      if (Date.now() >= qualiDateTime.getTime()) {
+        await execute("UPDATE f1_races SET status = 'qualifying', picks_locked = 1 WHERE id = $1", [race.id]);
+      } else {
+        console.log(`Ignoring qualifying results for round ${round}: qualifying date ${qualiDateStr} is in the future.`);
+      }
     }
   } catch (err) {
     console.log(`No qualifying results available for round ${round}.`);
@@ -409,9 +415,14 @@ export async function syncRaceResults(round: number): Promise<void> {
     });
     console.log(`Synced ${raceResults.length} race results.`);
 
-    // Update race status to completed
+    // Update race status to completed — only if the race date has actually passed
     if (raceResults.length > 0) {
-      await execute("UPDATE f1_races SET status = 'completed' WHERE id = $1", [race.id]);
+      const raceDateTime = new Date(race.race_date + 'T00:00:00Z');
+      if (Date.now() >= raceDateTime.getTime()) {
+        await execute("UPDATE f1_races SET status = 'completed' WHERE id = $1", [race.id]);
+      } else {
+        console.log(`Ignoring race results for round ${round}: race date ${race.race_date} is in the future.`);
+      }
     }
   } catch (err) {
     console.log(`No race results available for round ${round}.`);

@@ -7,6 +7,7 @@ import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import RaceCountdown from '../components/race/RaceCountdown';
 import Leaderboard from '../components/standings/Leaderboard';
+import { formatRaceDate, parseRaceDateTime } from '../utils/date';
 
 /* ── Country flag emoji lookup ── */
 const FLAG_MAP: Record<string, string> = {
@@ -33,12 +34,12 @@ function RaceTimeline({ races, nextRaceId }: { races: F1Race[]; nextRaceId?: num
   const visible = races.slice(startIdx, startIdx + 7);
 
   return (
-    <div style={{ display: 'flex', gap: '0.375rem', overflowX: 'auto', padding: '0.25rem 0' }}>
+    <div style={{ display: 'flex', overflowX: 'auto', padding: '0.25rem 0' }}>
       {visible.map((race) => {
         const isNext = race.id === nextRaceId;
         const isCompleted = race.status === 'completed';
-        const month = new Date(race.race_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' });
-        const day = new Date(race.race_date + 'T00:00:00').getDate();
+        const month = formatRaceDate(race.race_date, { month: 'short' });
+        const day = new Date(race.race_date + 'T00:00:00Z').getUTCDate();
 
         return (
           <div
@@ -47,6 +48,7 @@ function RaceTimeline({ races, nextRaceId }: { races: F1Race[]; nextRaceId?: num
             style={{
               flex: '0 0 auto',
               width: '5.5rem',
+              marginRight: '0.375rem',
               padding: '0.5rem 0.375rem',
               borderRadius: '8px',
               background: isNext ? 'var(--color-navy)' : isCompleted ? 'var(--color-light-gray)' : 'var(--color-white)',
@@ -178,23 +180,15 @@ export default function DashboardPage() {
             <p className="text-gray mb-1" style={{ fontSize: '0.8125rem' }}>
               {nextRace.circuit_name} &middot; {nextRace.country || ''}
             </p>
-            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }} className="countdown-row">
               {nextRace.quali_date && (
                 <RaceCountdown
-                  targetDate={
-                    nextRace.quali_time
-                      ? `${nextRace.quali_date}T${nextRace.quali_time}`
-                      : nextRace.quali_date
-                  }
+                  targetDate={parseRaceDateTime(nextRace.quali_date, nextRace.quali_time).toISOString()}
                   label="Qualifying (picks lock)"
                 />
               )}
               <RaceCountdown
-                targetDate={
-                  nextRace.race_time
-                    ? `${nextRace.race_date}T${nextRace.race_time}`
-                    : nextRace.race_date
-                }
+                targetDate={parseRaceDateTime(nextRace.race_date, nextRace.race_time).toISOString()}
                 label="Race starts in"
               />
             </div>

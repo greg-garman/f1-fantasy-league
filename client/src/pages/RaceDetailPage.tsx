@@ -5,6 +5,7 @@ import type { F1Race, F1RaceResult, RaceScore } from '../types';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import { formatRaceDate } from '../utils/date';
 
 export default function RaceDetailPage() {
   const { raceId } = useParams<{ raceId: string }>();
@@ -44,7 +45,7 @@ export default function RaceDetailPage() {
         {race.circuit_name}
         {race.country ? ` \u00B7 ${race.country}` : ''}
         {' \u00B7 '}
-        {new Date(race.race_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        {formatRaceDate(race.race_date, { month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
       <div className="mb-2">
         <Badge variant={race.status === 'completed' ? 'green' : 'gray'}>
