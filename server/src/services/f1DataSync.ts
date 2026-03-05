@@ -101,6 +101,15 @@ export async function syncSeasonData(): Promise<void> {
   if (races.length === 0 && SEASON === 2026) {
     console.log('Using hardcoded 2026 F1 calendar.');
     races = FALLBACK_2026_CALENDAR;
+  } else if (races.length > 0) {
+    // Validate that the API returned dates for the correct year
+    // The jolpi.ca Ergast API may return stale data from a prior season
+    const firstRaceDate = races[0]?.date ?? '';
+    const firstRaceYear = parseInt(firstRaceDate.substring(0, 4), 10);
+    if (firstRaceYear !== SEASON) {
+      console.log(`API returned dates for year ${firstRaceYear}, expected ${SEASON}. Discarding.`);
+      races = SEASON === 2026 ? FALLBACK_2026_CALENDAR : [];
+    }
   } else if (races.length === 0) {
     console.log(`No race calendar data available for ${SEASON}.`);
   }
