@@ -123,10 +123,9 @@ export function getMyTeam() {
   return get<{ team: UserTeamEntry[]; budget: number }>('/teams/my');
 }
 
-export function updateTeam(driverInId: string, driverOutId: string | null) {
-  return post<{ team: UserTeamEntry[]; budget: number }>('/teams/transfer', {
-    driver_in_id: driverInId,
-    driver_out_id: driverOutId,
+export function updateTeam(slot: number, driverInId: string) {
+  return put<{ team: UserTeamEntry[]; budget: number }>('/teams/my', {
+    transfers: [{ slot, driverInId }],
   });
 }
 
