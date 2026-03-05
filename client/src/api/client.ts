@@ -100,7 +100,7 @@ export function getDriver(id: number) {
 /* ------------------------------------------------------------------ */
 
 export function getRaces() {
-  return get<{ races: F1Race[] }>('/races').then(r => r.races);
+  return get<{ races: F1Race[] }>('/races').then(r => r.races ?? []);
 }
 
 export function getNextRace() {
@@ -188,6 +188,10 @@ export function syncSeason() {
   return post<{ message: string }>('/admin/sync-season');
 }
 
+export function seedDrivers() {
+  return post<{ message: string }>('/admin/seed-drivers');
+}
+
 export function unlockRace(raceId: number) {
   return post<{ message: string }>(`/admin/unlock-race/${raceId}`);
 }
@@ -258,6 +262,7 @@ const api = {
   getStandingsByRace,
   getSettings,
   syncSeason,
+  seedDrivers,
   unlockRace,
   syncRace,
   scoreRace,

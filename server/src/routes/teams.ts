@@ -59,18 +59,19 @@ router.put('/my', async (req: Request, res: Response): Promise<void> => {
   const user = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
   let budget = user!.budget;
 
-  // If team has fewer than 5 drivers, this is initial team building — no transfer limits
-  const isInitialSetup = currentTeam.length < 5;
+  // Transfers are unlimited during week 1 (before the first race qualifying locks).
+  // This covers both initial team building AND swapping drivers before the season starts.
+  const isPreSeason = nextRace.round === 1 && nextRace.picks_locked === 0;
 
-  // Check free transfers remaining (only enforced after initial team is complete)
+  // Check free transfers remaining (only enforced after first race locks)
   const transfersThisRace = await queryOne<{ count: number }>(
     'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
     [userId, nextRace.id]
   );
 
   const freeTransfersUsed = transfersThisRace!.count;
-  const freeRemaining = isInitialSetup
-    ? transfers.length  // effectively unlimited during initial setup
+  const freeRemaining = isPreSeason
+    ? transfers.length  // effectively unlimited before first race
     : Math.max(0, config.freeTransfersPerRace - freeTransfersUsed);
 
   // Validate all transfers before executing
@@ -211,31 +212,25 @@ router.get('/transfers/remaining', async (req: Request, res: Response): Promise<
     return;
   }
 
-  // Check if user still building initial team (< 5 drivers)
-  const teamSize = await queryOne<{ count: number }>(
-    'SELECT COUNT(*) as count FROM user_teams WHERE user_id = $1',
-    [userId]
-  );
-  const isInitialSetup = (teamSize?.count ?? 0) < 5;
+  // Transfers are unlimited during week 1 (before the first race qualifying locks)
+  const isPreSeason = nextRace.round === 1 && nextRace.picks_locked === 0;
 
   const transfersThisRace = await queryOne<{ count: number }>(
     'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
     [userId, nextRace.id]
   );
 
-  // During initial team setup, transfers are unlimited
-  const slotsToFill = isInitialSetup ? (5 - (teamSize?.count ?? 0)) : 0;
-  const remaining = isInitialSetup
-    ? slotsToFill
+  const remaining = isPreSeason
+    ? 999  // unlimited before first race
     : Math.max(0, config.freeTransfersPerRace - transfersThisRace!.count);
 
   res.json({
     remaining,
-    total: isInitialSetup ? slotsToFill : config.freeTransfersPerRace,
+    total: isPreSeason ? 999 : config.freeTransfersPerRace,
     used: transfersThisRace!.count,
     raceId: nextRace.id,
-    penaltyPerExtra: isInitialSetup ? 0 : config.extraTransferPenalty,
-    isInitialSetup,
+    penaltyPerExtra: isPreSeason ? 0 : config.extraTransferPenalty,
+    isPreSeason,
   });
 });
 

@@ -101,7 +101,12 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
 router.post('/logout', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   await execute('DELETE FROM sessions WHERE id = $1', [req.sessionId]);
-  res.clearCookie('session_id');
+  res.clearCookie('session_id', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  });
   res.json({ ok: true });
 });
 

@@ -4,6 +4,7 @@ import { parseDate } from '../../utils/date';
 interface RaceCountdownProps {
   targetDate: string; /* ISO date or datetime string */
   label?: string;
+  raceStatus?: string; /* 'upcoming' | 'qualifying' | 'in_progress' | 'completed' */
 }
 
 function calcRemaining(target: number) {
@@ -17,7 +18,7 @@ function calcRemaining(target: number) {
   };
 }
 
-export default function RaceCountdown({ targetDate, label }: RaceCountdownProps) {
+export default function RaceCountdown({ targetDate, label, raceStatus }: RaceCountdownProps) {
   const target = parseDate(targetDate).getTime();
   const [remaining, setRemaining] = useState(() => calcRemaining(target));
 
@@ -27,6 +28,12 @@ export default function RaceCountdown({ targetDate, label }: RaceCountdownProps)
   }, [target]);
 
   if (remaining.total <= 0) {
+    // Only show "Race has started!" if the server confirms the race is not upcoming.
+    // If the server says 'upcoming' but the countdown hit zero, it's likely a
+    // data issue (stale dates from Ergast API) — show a neutral message instead.
+    if (raceStatus && raceStatus === 'upcoming') {
+      return null; // hide the countdown — race hasn't actually started
+    }
     return <p className="text-center text-gray font-semibold">Race has started!</p>;
   }
 
