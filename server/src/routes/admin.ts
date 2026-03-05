@@ -64,6 +64,25 @@ router.post('/score-race/:raceId', async (req: Request, res: Response): Promise<
   }
 });
 
+// POST /unlock-race/:raceId — manually unlock picks for a race
+router.post('/unlock-race/:raceId', async (req: Request, res: Response): Promise<void> => {
+  const raceId = parseInt(req.params.raceId, 10);
+
+  if (isNaN(raceId) || raceId < 1) {
+    res.status(400).json({ error: 'Invalid race ID' });
+    return;
+  }
+
+  const race = await queryOne<any>('SELECT * FROM f1_races WHERE id = $1', [raceId]);
+  if (!race) {
+    res.status(404).json({ error: 'Race not found' });
+    return;
+  }
+
+  await execute("UPDATE f1_races SET picks_locked = 0, status = 'upcoming' WHERE id = $1", [raceId]);
+  res.json({ ok: true, message: `Picks unlocked for race ${raceId} (${race.race_name})` });
+});
+
 // PUT /scores/:raceId/:userId — manual score adjustment
 router.put('/scores/:raceId/:userId', async (req: Request, res: Response): Promise<void> => {
   const raceId = parseInt(req.params.raceId, 10);

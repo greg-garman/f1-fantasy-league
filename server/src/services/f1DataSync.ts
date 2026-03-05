@@ -1,8 +1,24 @@
-import { execute, queryOne, transaction } from '../db/connection.js';
+import { execute, query, queryOne, transaction } from '../db/connection.js';
 import { config } from '../config.js';
 
 const API_BASE = config.f1ApiBase;
 const SEASON = config.seasonYear;
+
+/**
+ * Determine which season to use for driver data.
+ * Before round 1 is completed, use driverDataSeason (e.g. 2025).
+ * After round 1 is completed, switch to the current seasonYear (e.g. 2026).
+ */
+async function getDriverSeason(): Promise<number> {
+  const round1 = await queryOne<{ status: string }>(
+    "SELECT status FROM f1_races WHERE season = $1 AND round = 1",
+    [SEASON]
+  );
+  if (round1 && round1.status === 'completed') {
+    return SEASON;
+  }
+  return config.driverDataSeason;
+}
 
 // Constructor tier pricing
 const CONSTRUCTOR_TIERS: Record<string, { min: number; max: number }> = {
@@ -42,7 +58,8 @@ async function fetchJson(url: string): Promise<any> {
 }
 
 export async function syncSeasonData(): Promise<void> {
-  console.log(`Syncing season data for ${SEASON}...`);
+  const driverSeason = await getDriverSeason();
+  console.log(`Syncing season data: races from ${SEASON}, drivers from ${driverSeason}...`);
 
   // Fetch race calendar
   const raceData = await fetchJson(`${API_BASE}/${SEASON}.json`);
@@ -91,11 +108,12 @@ export async function syncSeasonData(): Promise<void> {
   console.log(`Synced ${races.length} races.`);
 
   // Fetch drivers via driverStandings (includes constructor info)
+  // Uses driverSeason which may differ from race calendar season
   let drivers: any[] = [];
   const constructorDrivers: Record<string, any[]> = {};
 
   try {
-    const standingsData = await fetchJson(`${API_BASE}/${SEASON}/driverStandings.json`);
+    const standingsData = await fetchJson(`${API_BASE}/${driverSeason}/driverStandings.json`);
     const standingsList = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
 
     if (standingsList.length === 0) {
@@ -116,8 +134,8 @@ export async function syncSeasonData(): Promise<void> {
     // Fallback: fetch drivers and constructors separately, then match them up
     try {
       const [driverData, constructorData] = await Promise.all([
-        fetchJson(`${API_BASE}/${SEASON}/drivers.json`),
-        fetchJson(`${API_BASE}/${SEASON}/constructors.json`),
+        fetchJson(`${API_BASE}/${driverSeason}/drivers.json`),
+        fetchJson(`${API_BASE}/${driverSeason}/constructors.json`),
       ]);
       drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
       const constructorsList = constructorData?.MRData?.ConstructorTable?.Constructors ?? [];
@@ -127,7 +145,7 @@ export async function syncSeasonData(): Promise<void> {
       for (const constructor of constructorsList) {
         try {
           const cdData = await fetchJson(
-            `${API_BASE}/${SEASON}/constructors/${constructor.constructorId}/drivers.json`
+            `${API_BASE}/${driverSeason}/constructors/${constructor.constructorId}/drivers.json`
           );
           const cDrivers = cdData?.MRData?.DriverTable?.Drivers ?? [];
           for (const cd of cDrivers) {
@@ -151,7 +169,7 @@ export async function syncSeasonData(): Promise<void> {
       }
     } catch {
       // Last resort: fetch just drivers without constructor info
-      const driverData = await fetchJson(`${API_BASE}/${SEASON}/drivers.json`);
+      const driverData = await fetchJson(`${API_BASE}/${driverSeason}/drivers.json`);
       drivers = driverData?.MRData?.DriverTable?.Drivers ?? [];
 
       for (const driver of drivers) {
@@ -210,7 +228,7 @@ export async function syncSeasonData(): Promise<void> {
     }
   });
 
-  console.log(`Synced ${drivers.length} drivers.`);
+  console.log(`Synced ${drivers.length} drivers from ${driverSeason} season.`);
 }
 
 export async function syncRaceResults(round: number): Promise<void> {

