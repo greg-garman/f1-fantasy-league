@@ -59,14 +59,19 @@ router.put('/my', async (req: Request, res: Response): Promise<void> => {
   const user = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
   let budget = user!.budget;
 
-  // Check free transfers remaining
+  // If team has fewer than 5 drivers, this is initial team building — no transfer limits
+  const isInitialSetup = currentTeam.length < 5;
+
+  // Check free transfers remaining (only enforced after initial team is complete)
   const transfersThisRace = await queryOne<{ count: number }>(
     'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
     [userId, nextRace.id]
   );
 
   const freeTransfersUsed = transfersThisRace!.count;
-  const freeRemaining = Math.max(0, config.freeTransfersPerRace - freeTransfersUsed);
+  const freeRemaining = isInitialSetup
+    ? transfers.length  // effectively unlimited during initial setup
+    : Math.max(0, config.freeTransfersPerRace - freeTransfersUsed);
 
   // Validate all transfers before executing
   const transferOps: { slot: number; driverOut: UserTeam | undefined; driverIn: F1Driver }[] = [];
@@ -206,19 +211,31 @@ router.get('/transfers/remaining', async (req: Request, res: Response): Promise<
     return;
   }
 
+  // Check if user still building initial team (< 5 drivers)
+  const teamSize = await queryOne<{ count: number }>(
+    'SELECT COUNT(*) as count FROM user_teams WHERE user_id = $1',
+    [userId]
+  );
+  const isInitialSetup = (teamSize?.count ?? 0) < 5;
+
   const transfersThisRace = await queryOne<{ count: number }>(
     'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
     [userId, nextRace.id]
   );
 
-  const remaining = Math.max(0, config.freeTransfersPerRace - transfersThisRace!.count);
+  // During initial team setup, transfers are unlimited
+  const slotsToFill = isInitialSetup ? (5 - (teamSize?.count ?? 0)) : 0;
+  const remaining = isInitialSetup
+    ? slotsToFill
+    : Math.max(0, config.freeTransfersPerRace - transfersThisRace!.count);
 
   res.json({
     remaining,
-    total: config.freeTransfersPerRace,
+    total: isInitialSetup ? slotsToFill : config.freeTransfersPerRace,
     used: transfersThisRace!.count,
     raceId: nextRace.id,
-    penaltyPerExtra: config.extraTransferPenalty,
+    penaltyPerExtra: isInitialSetup ? 0 : config.extraTransferPenalty,
+    isInitialSetup,
   });
 });
 
