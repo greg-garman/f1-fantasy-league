@@ -202,6 +202,63 @@ router.put('/my', async (req: Request, res: Response): Promise<void> => {
   });
 });
 
+// DELETE /my/:slot — remove a driver from a slot (preseason only)
+router.delete('/my/:slot', async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user!.id;
+  const slot = parseInt(req.params.slot, 10);
+
+  if (isNaN(slot) || slot < 1 || slot > 5) {
+    res.status(400).json({ error: 'Invalid slot number' });
+    return;
+  }
+
+  const nextRace = await getNextRace();
+  if (!nextRace) {
+    res.status(400).json({ error: 'No upcoming race found' });
+    return;
+  }
+
+  const isPreSeason = nextRace.round === 1 && nextRace.picks_locked === 0;
+  if (!isPreSeason) {
+    res.status(400).json({ error: 'Removing drivers is only allowed during preseason' });
+    return;
+  }
+
+  const existing = await queryOne<{ driver_id: string; price_paid: number }>(
+    'SELECT driver_id, price_paid FROM user_teams WHERE user_id = $1 AND slot = $2',
+    [userId, slot]
+  );
+
+  if (!existing) {
+    res.status(404).json({ error: 'No driver in that slot' });
+    return;
+  }
+
+  // Get driver's current price for budget refund
+  const driver = await queryOne<{ current_price: number }>(
+    'SELECT current_price FROM f1_drivers WHERE driver_id = $1',
+    [existing.driver_id]
+  );
+  const refund = driver?.current_price ?? existing.price_paid;
+
+  await transaction(async (client) => {
+    await client.query('DELETE FROM user_teams WHERE user_id = $1 AND slot = $2', [userId, slot]);
+    await client.query('UPDATE users SET budget = budget + $1 WHERE id = $2', [refund, userId]);
+  });
+
+  const updatedTeam = await query<any>(`
+    SELECT ut.*, d.code, d.first_name, d.last_name, d.constructor_name, d.current_price
+    FROM user_teams ut
+    JOIN f1_drivers d ON d.driver_id = ut.driver_id
+    WHERE ut.user_id = $1
+    ORDER BY ut.slot ASC
+  `, [userId]);
+
+  const updatedUser = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
+
+  res.json({ team: updatedTeam, budget: updatedUser!.budget });
+});
+
 // GET /transfers/remaining — how many free transfers user has left
 router.get('/transfers/remaining', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.id;

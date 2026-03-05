@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getMyTeam, getDrivers, updateTeam, getRemainingTransfers } from '../api/client';
+import { getMyTeam, getDrivers, updateTeam, removeDriver, getRemainingTransfers } from '../api/client';
 import type { UserTeamEntry, F1Driver } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -14,6 +14,7 @@ export default function MyTeamPage() {
   const [allDrivers, setAllDrivers] = useState<F1Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
 
   /* transfer modal state */
   const [modalOpen, setModalOpen] = useState(false);
@@ -98,6 +99,19 @@ export default function MyTeamPage() {
     }
   };
 
+  const handleRemove = async (slot: UserTeamEntry) => {
+    setRemoving(slot.slot);
+    try {
+      const res = await removeDriver(slot.slot);
+      setTeam(res.team);
+      setBudget(res.budget);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Remove failed');
+    } finally {
+      setRemoving(null);
+    }
+  };
+
   const budgetAfterTransfer = useMemo(() => {
     if (!selectedDriver) return budget;
     const outPrice = slotToReplace ? slotToReplace.price_paid : 0;
@@ -128,19 +142,31 @@ export default function MyTeamPage() {
         {team.map((slot) => {
           const d = slot.driver;
           return (
-            <div key={slot.id} className="driver-card" onClick={() => openTransferModal(slot)}>
-              <div className="driver-card__info">
-                <span className="driver-card__name">
-                  {d ? `${d.first_name} ${d.last_name}` : slot.driver_id}
-                </span>
-                <span className="driver-card__constructor">{d?.constructor_name || ''}</span>
+            <div key={slot.id} className="driver-card" style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openTransferModal(slot)}>
+                <div className="driver-card__info">
+                  <span className="driver-card__name">
+                    {d ? `${d.first_name} ${d.last_name}` : slot.driver_id}
+                  </span>
+                  <span className="driver-card__constructor">{d?.constructor_name || ''}</span>
+                </div>
+                <div className="driver-card__meta">
+                  <span className="driver-card__price">
+                    ${(d?.current_price ?? slot.price_paid).toFixed(1)}M
+                  </span>
+                  <span className="driver-card__code">{d?.code || ''}</span>
+                </div>
               </div>
-              <div className="driver-card__meta">
-                <span className="driver-card__price">
-                  ${(d?.current_price ?? slot.price_paid).toFixed(1)}M
-                </span>
-                <span className="driver-card__code">{d?.code || ''}</span>
-              </div>
+              {remaining !== null && remaining >= 999 && (
+                <button
+                  className="btn btn--danger btn--small"
+                  style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}
+                  disabled={removing === slot.slot}
+                  onClick={(e) => { e.stopPropagation(); handleRemove(slot); }}
+                >
+                  {removing === slot.slot ? '...' : 'Remove'}
+                </button>
+              )}
             </div>
           );
         })}
