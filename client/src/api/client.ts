@@ -58,6 +58,10 @@ function put<T>(path: string, body?: unknown) {
   });
 }
 
+function del<T>(path: string) {
+  return request<T>(path, { method: 'DELETE' });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Auth                                                               */
 /* ------------------------------------------------------------------ */
@@ -127,6 +131,10 @@ export function updateTeam(slot: number, driverInId: string) {
   return put<{ team: UserTeamEntry[]; budget: number }>('/teams/my', {
     transfers: [{ slot, driverInId }],
   });
+}
+
+export function removeDriver(slot: number) {
+  return del<{ team: UserTeamEntry[]; budget: number }>(`/teams/my/${slot}`);
 }
 
 export function getPlayerTeam(userId: number) {
@@ -251,6 +259,7 @@ const api = {
   getRaceScores,
   getMyTeam,
   updateTeam,
+  removeDriver,
   getPlayerTeam,
   getTransferLog,
   getRemainingTransfers,
