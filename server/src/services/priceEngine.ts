@@ -1,42 +1,38 @@
-import db from '../db/connection.js';
+import { query, queryOne, transaction } from '../db/connection.js';
 import type { F1Driver } from '../types/index.js';
 
-export function updatePrices(raceId: number): void {
+export async function updatePrices(raceId: number): Promise<void> {
   console.log(`Updating driver prices after race ${raceId}...`);
 
-  const race = db.prepare('SELECT * FROM f1_races WHERE id = ?').get(raceId) as { id: number; round: number; season: number } | undefined;
+  const race = await queryOne<{ id: number; round: number; season: number }>(
+    'SELECT * FROM f1_races WHERE id = $1', [raceId]
+  );
   if (!race) {
     throw new Error(`Race ${raceId} not found`);
   }
 
-  const activeDrivers = db.prepare('SELECT * FROM f1_drivers WHERE is_active = 1').all() as F1Driver[];
+  const activeDrivers = await query<F1Driver>(
+    'SELECT * FROM f1_drivers WHERE is_active = 1'
+  );
 
   // Get the last 3 completed races up to and including this one for rolling average
-  const recentRaces = db.prepare(`
+  const recentRaces = await query<{ id: number }>(`
     SELECT id FROM f1_races
-    WHERE season = ? AND status = 'completed' AND round <= ?
+    WHERE season = $1 AND status = 'completed' AND round <= $2
     ORDER BY round DESC
     LIMIT 3
-  `).all(race.season, race.round) as { id: number }[];
+  `, [race.season, race.round]);
 
   const recentRaceIds = recentRaces.map(r => r.id);
-
-  const upsertPriceHistory = db.prepare(`
-    INSERT INTO driver_price_history (driver_id, race_id, price)
-    VALUES (?, ?, ?)
-  `);
-
-  const updateDriverPrice = db.prepare(`
-    UPDATE f1_drivers SET current_price = ? WHERE driver_id = ?
-  `);
 
   // Calculate fantasy points per driver for this race from race_scores breakdown
   // We need per-driver points. Get from f1_race_results and compute similarly to scoring.
   // Simpler approach: sum up the points from all sessions for the driver this race.
-  function getDriverFantasyPoints(driverId: string, targetRaceId: number): number {
-    const results = db.prepare(
-      'SELECT * FROM f1_race_results WHERE race_id = ? AND driver_id = ?'
-    ).all(targetRaceId, driverId) as { session_type: string; finish_position: number | null; status: string | null; fastest_lap: number; grid_position: number | null }[];
+  async function getDriverFantasyPoints(driverId: string, targetRaceId: number): Promise<number> {
+    const results = await query<{ session_type: string; finish_position: number | null; status: string | null; fastest_lap: number; grid_position: number | null }>(
+      'SELECT * FROM f1_race_results WHERE race_id = $1 AND driver_id = $2',
+      [targetRaceId, driverId]
+    );
 
     let points = 0;
     for (const r of results) {
@@ -69,16 +65,23 @@ export function updatePrices(raceId: number): void {
     return points;
   }
 
-  const updateAll = db.transaction(() => {
-    for (const driver of activeDrivers) {
-      const currentRacePoints = getDriverFantasyPoints(driver.driver_id, raceId);
+  // Pre-fetch all driver fantasy points before the transaction
+  const driverPointsMap = new Map<string, { currentRacePoints: number; rollingAvg: number }>();
+  for (const driver of activeDrivers) {
+    const currentRacePoints = await getDriverFantasyPoints(driver.driver_id, raceId);
 
-      // Rolling 3-race average (including current race)
-      let totalRecentPoints = 0;
-      for (const rid of recentRaceIds) {
-        totalRecentPoints += getDriverFantasyPoints(driver.driver_id, rid);
-      }
-      const rollingAvg = recentRaceIds.length > 0 ? totalRecentPoints / recentRaceIds.length : 0;
+    let totalRecentPoints = 0;
+    for (const rid of recentRaceIds) {
+      totalRecentPoints += await getDriverFantasyPoints(driver.driver_id, rid);
+    }
+    const rollingAvg = recentRaceIds.length > 0 ? totalRecentPoints / recentRaceIds.length : 0;
+
+    driverPointsMap.set(driver.driver_id, { currentRacePoints, rollingAvg });
+  }
+
+  await transaction(async (client) => {
+    for (const driver of activeDrivers) {
+      const { currentRacePoints, rollingAvg } = driverPointsMap.get(driver.driver_id)!;
 
       // Price adjustment
       const adjustment = (currentRacePoints - rollingAvg) * 0.1;
@@ -92,11 +95,10 @@ export function updatePrices(raceId: number): void {
       // Round to nearest 0.1
       newPrice = Math.round(newPrice * 10) / 10;
 
-      updateDriverPrice.run(newPrice, driver.driver_id);
-      upsertPriceHistory.run(driver.driver_id, raceId, newPrice);
+      await client.query('UPDATE f1_drivers SET current_price = $1 WHERE driver_id = $2', [newPrice, driver.driver_id]);
+      await client.query('INSERT INTO driver_price_history (driver_id, race_id, price) VALUES ($1, $2, $3)', [driver.driver_id, raceId, newPrice]);
     }
   });
 
-  updateAll();
   console.log(`Updated prices for ${activeDrivers.length} drivers.`);
 }

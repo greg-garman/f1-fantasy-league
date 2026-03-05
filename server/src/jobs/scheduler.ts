@@ -20,7 +20,7 @@ export function initScheduler(): void {
   cron.schedule('*/30 12-20 * * 6', async () => {
     console.log('[Scheduler] Checking for qualifying results...');
     try {
-      const nextRace = getNextRace();
+      const nextRace = await getNextRace();
       if (nextRace) {
         await syncRaceResults(nextRace.round);
         console.log(`[Scheduler] Qualifying sync for round ${nextRace.round} completed.`);
@@ -34,7 +34,7 @@ export function initScheduler(): void {
   cron.schedule('*/15 12-22 * * 0', async () => {
     console.log('[Scheduler] Checking for race results...');
     try {
-      const nextRace = getNextRace();
+      const nextRace = await getNextRace();
       if (nextRace) {
         await syncRaceResults(nextRace.round);
         console.log(`[Scheduler] Race sync for round ${nextRace.round} completed.`);
@@ -45,10 +45,10 @@ export function initScheduler(): void {
   }, { timezone: 'UTC' });
 
   // Every hour: lock picks if qualifying has started
-  cron.schedule('0 * * * *', () => {
+  cron.schedule('0 * * * *', async () => {
     console.log('[Scheduler] Checking pick locks...');
     try {
-      lockPicksIfNeeded();
+      await lockPicksIfNeeded();
       console.log('[Scheduler] Pick lock check completed.');
     } catch (err) {
       console.error('[Scheduler] Pick lock check failed:', err);

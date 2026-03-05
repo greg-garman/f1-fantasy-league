@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import db from '../db/connection.js';
+import { query, queryOne, execute, transaction } from '../db/connection.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isPicksLocked, getNextRace } from '../services/lockManager.js';
@@ -11,25 +11,25 @@ const router = Router();
 router.use(authMiddleware);
 
 // GET /my — current user's team
-router.get('/my', (req: Request, res: Response): void => {
+router.get('/my', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.id;
 
-  const team = db.prepare(`
+  const team = await query<any>(`
     SELECT ut.*, d.code, d.first_name, d.last_name, d.constructor_name,
            d.constructor_id, d.current_price, d.initial_price, d.nationality, d.number, d.photo_url
     FROM user_teams ut
     JOIN f1_drivers d ON d.driver_id = ut.driver_id
-    WHERE ut.user_id = ?
+    WHERE ut.user_id = $1
     ORDER BY ut.slot ASC
-  `).all(userId);
+  `, [userId]);
 
-  const user = db.prepare('SELECT budget FROM users WHERE id = ?').get(userId) as { budget: number };
+  const user = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
 
-  res.json({ team, budget: user.budget });
+  res.json({ team, budget: user!.budget });
 });
 
 // PUT /my — make transfers
-router.put('/my', (req: Request, res: Response): void => {
+router.put('/my', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.id;
   const { transfers } = req.body as { transfers: { slot: number; driverInId: string }[] };
 
@@ -39,32 +39,33 @@ router.put('/my', (req: Request, res: Response): void => {
   }
 
   // Get the next race for lock check and transfer tracking
-  const nextRace = getNextRace();
+  const nextRace = await getNextRace();
   if (!nextRace) {
     res.status(400).json({ error: 'No upcoming race found' });
     return;
   }
 
   // Check if picks are locked
-  if (isPicksLocked(nextRace.id)) {
+  if (await isPicksLocked(nextRace.id)) {
     res.status(400).json({ error: 'Transfers are locked for this race (qualifying has started)' });
     return;
   }
 
   // Get current team
-  const currentTeam = db.prepare('SELECT * FROM user_teams WHERE user_id = ?').all(userId) as UserTeam[];
+  const currentTeam = await query<UserTeam>('SELECT * FROM user_teams WHERE user_id = $1', [userId]);
   const currentDriverIds = currentTeam.map(t => t.driver_id);
 
   // Get user budget
-  const user = db.prepare('SELECT budget FROM users WHERE id = ?').get(userId) as { budget: number };
-  let budget = user.budget;
+  const user = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
+  let budget = user!.budget;
 
   // Check free transfers remaining
-  const transfersThisRace = db.prepare(
-    'SELECT COUNT(*) as count FROM transfers WHERE user_id = ? AND race_id = ?'
-  ).get(userId, nextRace.id) as { count: number };
+  const transfersThisRace = await queryOne<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
+    [userId, nextRace.id]
+  );
 
-  const freeTransfersUsed = transfersThisRace.count;
+  const freeTransfersUsed = transfersThisRace!.count;
   const freeRemaining = Math.max(0, config.freeTransfersPerRace - freeTransfersUsed);
 
   // Validate all transfers before executing
@@ -72,7 +73,7 @@ router.put('/my', (req: Request, res: Response): void => {
 
   for (const transfer of transfers) {
     // Validate driver exists and is active
-    const driverIn = db.prepare('SELECT * FROM f1_drivers WHERE driver_id = ? AND is_active = 1').get(transfer.driverInId) as F1Driver | undefined;
+    const driverIn = await queryOne<F1Driver>('SELECT * FROM f1_drivers WHERE driver_id = $1 AND is_active = 1', [transfer.driverInId]);
     if (!driverIn) {
       res.status(400).json({ error: `Driver ${transfer.driverInId} not found or inactive` });
       return;
@@ -105,7 +106,7 @@ router.put('/my', (req: Request, res: Response): void => {
   for (const op of transferOps) {
     if (op.driverOut) {
       // Selling driver: get current price (not what was paid)
-      const outDriver = db.prepare('SELECT current_price FROM f1_drivers WHERE driver_id = ?').get(op.driverOut.driver_id) as { current_price: number } | undefined;
+      const outDriver = await queryOne<{ current_price: number }>('SELECT current_price FROM f1_drivers WHERE driver_id = $1', [op.driverOut.driver_id]);
       budgetChange += outDriver?.current_price ?? op.driverOut.price_paid;
     }
     budgetChange -= op.driverIn.current_price;
@@ -121,101 +122,109 @@ router.put('/my', (req: Request, res: Response): void => {
   const penalty = extraTransfers * config.extraTransferPenalty;
 
   // Execute transfers
-  const executeTransfers = db.transaction(() => {
+  await transaction(async (client) => {
     for (const op of transferOps) {
       // Remove old driver from slot if exists
       if (op.driverOut) {
-        db.prepare('DELETE FROM user_teams WHERE user_id = ? AND slot = ?').run(userId, op.slot);
+        await client.query('DELETE FROM user_teams WHERE user_id = $1 AND slot = $2', [userId, op.slot]);
       }
 
       // Add new driver
-      db.prepare(
-        'INSERT INTO user_teams (user_id, driver_id, slot, price_paid) VALUES (?, ?, ?, ?)'
-      ).run(userId, op.driverIn.driver_id, op.slot, op.driverIn.current_price);
+      await client.query(
+        'INSERT INTO user_teams (user_id, driver_id, slot, price_paid) VALUES ($1, $2, $3, $4)',
+        [userId, op.driverIn.driver_id, op.slot, op.driverIn.current_price]
+      );
+
+      // Get current price for driver out
+      let priceOut = 0;
+      if (op.driverOut) {
+        const outResult = await client.query('SELECT current_price FROM f1_drivers WHERE driver_id = $1', [op.driverOut.driver_id]);
+        priceOut = outResult.rows[0]?.current_price ?? 0;
+      }
 
       // Record transfer
-      db.prepare(`
+      await client.query(`
         INSERT INTO transfers (user_id, race_id, driver_out_id, driver_in_id, price_out, price_in)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
         userId,
         nextRace.id,
         op.driverOut?.driver_id ?? '',
         op.driverIn.driver_id,
-        op.driverOut ? (db.prepare('SELECT current_price FROM f1_drivers WHERE driver_id = ?').get(op.driverOut.driver_id) as any)?.current_price ?? 0 : 0,
+        priceOut,
         op.driverIn.current_price
-      );
+      ]);
     }
 
     // Update user budget
     const newBudget = Math.round((budget + budgetChange) * 10) / 10;
-    db.prepare('UPDATE users SET budget = ? WHERE id = ?').run(newBudget, userId);
+    await client.query('UPDATE users SET budget = $1 WHERE id = $2', [newBudget, userId]);
 
     // Apply penalty as manual adjustment if needed
     if (penalty > 0) {
-      const existing = db.prepare('SELECT * FROM race_scores WHERE user_id = ? AND race_id = ?').get(userId, nextRace.id);
+      const existingResult = await client.query('SELECT * FROM race_scores WHERE user_id = $1 AND race_id = $2', [userId, nextRace.id]);
+      const existing = existingResult.rows[0];
       if (existing) {
-        db.prepare(`
-          UPDATE race_scores SET manual_adjustment = manual_adjustment - ?, total_points = total_points - ? WHERE user_id = ? AND race_id = ?
-        `).run(penalty, penalty, userId, nextRace.id);
+        await client.query(`
+          UPDATE race_scores SET manual_adjustment = manual_adjustment - $1, total_points = total_points - $2 WHERE user_id = $3 AND race_id = $4
+        `, [penalty, penalty, userId, nextRace.id]);
       } else {
-        db.prepare(`
+        await client.query(`
           INSERT INTO race_scores (user_id, race_id, team_points, picks_points, total_points, manual_adjustment)
-          VALUES (?, ?, 0, 0, ?, ?)
-        `).run(userId, nextRace.id, -penalty, -penalty);
+          VALUES ($1, $2, 0, 0, $3, $4)
+        `, [userId, nextRace.id, -penalty, -penalty]);
       }
     }
   });
 
-  executeTransfers();
-
   // Return updated team
-  const updatedTeam = db.prepare(`
+  const updatedTeam = await query<any>(`
     SELECT ut.*, d.code, d.first_name, d.last_name, d.constructor_name, d.current_price
     FROM user_teams ut
     JOIN f1_drivers d ON d.driver_id = ut.driver_id
-    WHERE ut.user_id = ?
+    WHERE ut.user_id = $1
     ORDER BY ut.slot ASC
-  `).all(userId);
+  `, [userId]);
 
-  const updatedUser = db.prepare('SELECT budget FROM users WHERE id = ?').get(userId) as { budget: number };
+  const updatedUser = await queryOne<{ budget: number }>('SELECT budget FROM users WHERE id = $1', [userId]);
 
   res.json({
     team: updatedTeam,
-    budget: updatedUser.budget,
+    budget: updatedUser!.budget,
     penalty,
     extraTransfers,
   });
 });
 
 // GET /transfers/remaining — how many free transfers user has left
-router.get('/transfers/remaining', (req: Request, res: Response): void => {
+router.get('/transfers/remaining', async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.id;
 
-  const nextRace = getNextRace();
+  const nextRace = await getNextRace();
   if (!nextRace) {
     res.json({ remaining: config.freeTransfersPerRace, raceId: null });
     return;
   }
 
-  const transfersThisRace = db.prepare(
-    'SELECT COUNT(*) as count FROM transfers WHERE user_id = ? AND race_id = ?'
-  ).get(userId, nextRace.id) as { count: number };
+  const transfersThisRace = await queryOne<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transfers WHERE user_id = $1 AND race_id = $2',
+    [userId, nextRace.id]
+  );
 
-  const remaining = Math.max(0, config.freeTransfersPerRace - transfersThisRace.count);
+  const remaining = Math.max(0, config.freeTransfersPerRace - transfersThisRace!.count);
 
   res.json({
     remaining,
     total: config.freeTransfersPerRace,
-    used: transfersThisRace.count,
+    used: transfersThisRace!.count,
     raceId: nextRace.id,
     penaltyPerExtra: config.extraTransferPenalty,
   });
 });
 
 // GET /transfers/log — league-wide transfer log
-router.get('/transfers/log', (_req: Request, res: Response): void => {
-  const transfers = db.prepare(`
+router.get('/transfers/log', async (_req: Request, res: Response): Promise<void> => {
+  const transfers = await query<any>(`
     SELECT t.*, u.display_name, u.username,
            din.code as driver_in_code, din.first_name as driver_in_first, din.last_name as driver_in_last,
            dout.code as driver_out_code, dout.first_name as driver_out_first, dout.last_name as driver_out_last,
@@ -227,30 +236,32 @@ router.get('/transfers/log', (_req: Request, res: Response): void => {
     LEFT JOIN f1_races fr ON fr.id = t.race_id
     ORDER BY t.created_at DESC
     LIMIT 100
-  `).all();
+  `);
 
   res.json({ transfers });
 });
 
 // GET /:userId — view another player's team
-router.get('/:userId', (req: Request, res: Response): void => {
+router.get('/:userId', async (req: Request, res: Response): Promise<void> => {
   const userId = parseInt(req.params.userId, 10);
 
-  const user = db.prepare('SELECT id, username, display_name, budget FROM users WHERE id = ?').get(userId) as { id: number; username: string; display_name: string; budget: number } | undefined;
+  const user = await queryOne<{ id: number; username: string; display_name: string; budget: number }>(
+    'SELECT id, username, display_name, budget FROM users WHERE id = $1', [userId]
+  );
 
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
   }
 
-  const team = db.prepare(`
+  const team = await query<any>(`
     SELECT ut.*, d.code, d.first_name, d.last_name, d.constructor_name,
            d.constructor_id, d.current_price, d.initial_price, d.nationality, d.number
     FROM user_teams ut
     JOIN f1_drivers d ON d.driver_id = ut.driver_id
-    WHERE ut.user_id = ?
+    WHERE ut.user_id = $1
     ORDER BY ut.slot ASC
-  `).all(userId);
+  `, [userId]);
 
   res.json({ user: { id: user.id, username: user.username, display_name: user.display_name }, team });
 });

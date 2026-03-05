@@ -1,29 +1,29 @@
 import { Router, Request, Response } from 'express';
-import db from '../db/connection.js';
+import { query, queryOne } from '../db/connection.js';
 import { config } from '../config.js';
 import type { F1Race } from '../types/index.js';
 
 const router = Router();
 
 // GET / — all races for current season, ordered by round
-router.get('/', (_req: Request, res: Response): void => {
-  const races = db.prepare(`
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
+  const races = await query<F1Race>(`
     SELECT * FROM f1_races
-    WHERE season = ?
+    WHERE season = $1
     ORDER BY round ASC
-  `).all(config.seasonYear) as F1Race[];
+  `, [config.seasonYear]);
 
   res.json({ races });
 });
 
 // GET /next — next upcoming race
-router.get('/next', (_req: Request, res: Response): void => {
-  const race = db.prepare(`
+router.get('/next', async (_req: Request, res: Response): Promise<void> => {
+  const race = await queryOne<F1Race>(`
     SELECT * FROM f1_races
-    WHERE season = ? AND status IN ('upcoming', 'qualifying', 'in_progress')
+    WHERE season = $1 AND status IN ('upcoming', 'qualifying', 'in_progress')
     ORDER BY round ASC
     LIMIT 1
-  `).get(config.seasonYear) as F1Race | undefined;
+  `, [config.seasonYear]);
 
   if (!race) {
     res.json({ race: null });
@@ -34,38 +34,38 @@ router.get('/next', (_req: Request, res: Response): void => {
 });
 
 // GET /:raceId — race detail with results
-router.get('/:raceId', (req: Request, res: Response): void => {
+router.get('/:raceId', async (req: Request, res: Response): Promise<void> => {
   const raceId = parseInt(req.params.raceId, 10);
 
-  const race = db.prepare('SELECT * FROM f1_races WHERE id = ?').get(raceId) as F1Race | undefined;
+  const race = await queryOne<F1Race>('SELECT * FROM f1_races WHERE id = $1', [raceId]);
 
   if (!race) {
     res.status(404).json({ error: 'Race not found' });
     return;
   }
 
-  const results = db.prepare(`
+  const results = await query<any>(`
     SELECT rr.*, d.code, d.first_name, d.last_name, d.constructor_name
     FROM f1_race_results rr
     LEFT JOIN f1_drivers d ON d.driver_id = rr.driver_id
-    WHERE rr.race_id = ?
+    WHERE rr.race_id = $1
     ORDER BY rr.session_type, rr.finish_position ASC
-  `).all(raceId);
+  `, [raceId]);
 
   res.json({ race, results });
 });
 
 // GET /:raceId/scores — all player scores for this race
-router.get('/:raceId/scores', (req: Request, res: Response): void => {
+router.get('/:raceId/scores', async (req: Request, res: Response): Promise<void> => {
   const raceId = parseInt(req.params.raceId, 10);
 
-  const scores = db.prepare(`
+  const scores = await query<any>(`
     SELECT rs.*, u.display_name, u.username
     FROM race_scores rs
     JOIN users u ON u.id = rs.user_id
-    WHERE rs.race_id = ?
+    WHERE rs.race_id = $1
     ORDER BY rs.total_points DESC
-  `).all(raceId);
+  `, [raceId]);
 
   res.json({ scores });
 });

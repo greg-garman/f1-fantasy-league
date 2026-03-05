@@ -1,4 +1,4 @@
-import db from '../db/connection.js';
+import { query, queryOne, transaction } from '../db/connection.js';
 import type { F1RaceResult, UserTeam, WeeklyPick } from '../types/index.js';
 
 // Race finish points
@@ -75,21 +75,24 @@ function calcPositionsGainedBonus(raceResult: F1RaceResult): number {
   return 0;
 }
 
-export function scoreRace(raceId: number): void {
+export async function scoreRace(raceId: number): Promise<void> {
   console.log(`Scoring race ${raceId}...`);
 
   // Get all results for this race
-  const raceResults = db.prepare(
-    'SELECT * FROM f1_race_results WHERE race_id = ? AND session_type = ?'
-  ).all(raceId, 'race') as F1RaceResult[];
+  const raceResults = await query<F1RaceResult>(
+    'SELECT * FROM f1_race_results WHERE race_id = $1 AND session_type = $2',
+    [raceId, 'race']
+  );
 
-  const qualiResults = db.prepare(
-    'SELECT * FROM f1_race_results WHERE race_id = ? AND session_type = ?'
-  ).all(raceId, 'qualifying') as F1RaceResult[];
+  const qualiResults = await query<F1RaceResult>(
+    'SELECT * FROM f1_race_results WHERE race_id = $1 AND session_type = $2',
+    [raceId, 'qualifying']
+  );
 
-  const sprintResults = db.prepare(
-    'SELECT * FROM f1_race_results WHERE race_id = ? AND session_type = ?'
-  ).all(raceId, 'sprint') as F1RaceResult[];
+  const sprintResults = await query<F1RaceResult>(
+    'SELECT * FROM f1_race_results WHERE race_id = $1 AND session_type = $2',
+    [raceId, 'sprint']
+  );
 
   // Build maps for quick lookup
   const raceByDriver = new Map<string, F1RaceResult>();
@@ -102,7 +105,9 @@ export function scoreRace(raceId: number): void {
   for (const s of sprintResults) sprintByDriver.set(s.driver_id, s);
 
   // Build teammate map: constructor -> [driver_ids]
-  const drivers = db.prepare('SELECT driver_id, constructor_id FROM f1_drivers WHERE is_active = 1').all() as { driver_id: string; constructor_id: string }[];
+  const drivers = await query<{ driver_id: string; constructor_id: string }>(
+    'SELECT driver_id, constructor_id FROM f1_drivers WHERE is_active = 1'
+  );
   const constructorDrivers = new Map<string, string[]>();
   const driverConstructor = new Map<string, string>();
   for (const d of drivers) {
@@ -139,10 +144,12 @@ export function scoreRace(raceId: number): void {
   }
 
   // Get all users
-  const users = db.prepare('SELECT id FROM users').all() as { id: number }[];
+  const users = await query<{ id: number }>('SELECT id FROM users');
 
   // H2H matchups for this race
-  const matchups = db.prepare('SELECT * FROM h2h_matchups WHERE race_id = ?').all(raceId) as { id: number; race_id: number; driver_a_id: string; driver_b_id: string }[];
+  const matchups = await query<{ id: number; race_id: number; driver_a_id: string; driver_b_id: string }>(
+    'SELECT * FROM h2h_matchups WHERE race_id = $1', [raceId]
+  );
 
   // Determine actual race results for pick scoring
   const pole = qualiResults.find(q => q.finish_position === 1)?.driver_id ?? null;
@@ -175,24 +182,11 @@ export function scoreRace(raceId: number): void {
     }
   }
 
-  const upsertScore = db.prepare(`
-    INSERT INTO race_scores (user_id, race_id, team_points, picks_points, total_points, breakdown_json)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, race_id) DO UPDATE SET
-      team_points = excluded.team_points,
-      picks_points = excluded.picks_points,
-      total_points = excluded.total_points,
-      breakdown_json = excluded.breakdown_json
-  `);
-
-  const updatePick = db.prepare(`
-    UPDATE weekly_picks SET is_correct = ?, points_earned = ? WHERE id = ?
-  `);
-
-  const scoreAll = db.transaction(() => {
+  await transaction(async (client) => {
     for (const user of users) {
       // Component A: Team Points
-      const team = db.prepare('SELECT * FROM user_teams WHERE user_id = ?').all(user.id) as UserTeam[];
+      const teamResult = await client.query('SELECT * FROM user_teams WHERE user_id = $1', [user.id]);
+      const team = teamResult.rows as UserTeam[];
       const driverBreakdowns: DriverBreakdown[] = [];
 
       let teamPoints = 0;
@@ -241,7 +235,8 @@ export function scoreRace(raceId: number): void {
       }
 
       // Component B: Weekly Picks Points
-      const picks = db.prepare('SELECT * FROM weekly_picks WHERE user_id = ? AND race_id = ?').all(user.id, raceId) as WeeklyPick[];
+      const picksResult = await client.query('SELECT * FROM weekly_picks WHERE user_id = $1 AND race_id = $2', [user.id, raceId]);
+      const picks = picksResult.rows as WeeklyPick[];
       let picksPoints = 0;
       const pickBreakdowns: PickBreakdown[] = [];
 
@@ -320,11 +315,18 @@ export function scoreRace(raceId: number): void {
           points: pts,
         });
 
-        updatePick.run(correct ? 1 : 0, pts, pick.id);
+        await client.query(
+          'UPDATE weekly_picks SET is_correct = $1, points_earned = $2 WHERE id = $3',
+          [correct ? 1 : 0, pts, pick.id]
+        );
       }
 
       // Get existing manual adjustment if any
-      const existing = db.prepare('SELECT manual_adjustment FROM race_scores WHERE user_id = ? AND race_id = ?').get(user.id, raceId) as { manual_adjustment: number } | undefined;
+      const existingResult = await client.query(
+        'SELECT manual_adjustment FROM race_scores WHERE user_id = $1 AND race_id = $2',
+        [user.id, raceId]
+      );
+      const existing = existingResult.rows[0] as { manual_adjustment: number } | undefined;
       const manualAdj = existing?.manual_adjustment ?? 0;
 
       const totalPoints = teamPoints + picksPoints + manualAdj;
@@ -337,10 +339,17 @@ export function scoreRace(raceId: number): void {
         manual_adjustment: manualAdj,
       });
 
-      upsertScore.run(user.id, raceId, teamPoints, picksPoints, totalPoints, breakdown);
+      await client.query(`
+        INSERT INTO race_scores (user_id, race_id, team_points, picks_points, total_points, breakdown_json)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT(user_id, race_id) DO UPDATE SET
+          team_points = excluded.team_points,
+          picks_points = excluded.picks_points,
+          total_points = excluded.total_points,
+          breakdown_json = excluded.breakdown_json
+      `, [user.id, raceId, teamPoints, picksPoints, totalPoints, breakdown]);
     }
   });
 
-  scoreAll();
   console.log(`Scored race ${raceId} for ${users.length} users.`);
 }
