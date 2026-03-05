@@ -187,7 +187,7 @@ export default function MyTeamPage() {
           </div>
         )}
 
-        <div className="flex gap-1 mb-1">
+        <div className="transfer-filter mb-1">
           <input
             type="text"
             placeholder="Filter drivers..."

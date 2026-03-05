@@ -22,8 +22,15 @@ export function initScheduler(): void {
     try {
       const nextRace = await getNextRace();
       if (nextRace) {
-        await syncRaceResults(nextRace.round);
-        console.log(`[Scheduler] Qualifying sync for round ${nextRace.round} completed.`);
+        // Only sync if the qualifying date has passed (race weekend is happening)
+        const qualiDate = nextRace.quali_date || nextRace.race_date;
+        const qualiDateTime = new Date(qualiDate + 'T00:00:00Z').getTime();
+        if (Date.now() >= qualiDateTime) {
+          await syncRaceResults(nextRace.round);
+          console.log(`[Scheduler] Qualifying sync for round ${nextRace.round} completed.`);
+        } else {
+          console.log(`[Scheduler] Skipping qualifying sync: next race (round ${nextRace.round}) hasn't started yet.`);
+        }
       }
     } catch (err) {
       console.error('[Scheduler] Qualifying sync failed:', err);
@@ -36,8 +43,14 @@ export function initScheduler(): void {
     try {
       const nextRace = await getNextRace();
       if (nextRace) {
-        await syncRaceResults(nextRace.round);
-        console.log(`[Scheduler] Race sync for round ${nextRace.round} completed.`);
+        // Only sync if the race date has arrived
+        const raceDateTime = new Date(nextRace.race_date + 'T00:00:00Z').getTime();
+        if (Date.now() >= raceDateTime) {
+          await syncRaceResults(nextRace.round);
+          console.log(`[Scheduler] Race sync for round ${nextRace.round} completed.`);
+        } else {
+          console.log(`[Scheduler] Skipping race sync: next race (round ${nextRace.round}) hasn't started yet.`);
+        }
       }
     } catch (err) {
       console.error('[Scheduler] Race sync failed:', err);

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { parseDate } from '../../utils/date';
 
 interface RaceCountdownProps {
-  targetDate: string; /* ISO date string */
+  targetDate: string; /* ISO date or datetime string */
   label?: string;
 }
 
@@ -17,7 +18,7 @@ function calcRemaining(target: number) {
 }
 
 export default function RaceCountdown({ targetDate, label }: RaceCountdownProps) {
-  const target = new Date(targetDate).getTime();
+  const target = parseDate(targetDate).getTime();
   const [remaining, setRemaining] = useState(() => calcRemaining(target));
 
   useEffect(() => {

@@ -927,14 +927,20 @@ ul, ol { list-style: none; }
 }
 
 .race-list__name {
+  display: block;
   font-weight: 600;
   font-size: 0.9375rem;
   color: var(--color-navy);
 }
 
 .race-list__circuit {
+  display: block;
   font-size: 0.8125rem;
   color: var(--color-gray);
+}
+
+.race-list__badges > * + * {
+  margin-top: 0.25rem;
 }
 
 .race-list__date {
@@ -1086,6 +1092,14 @@ ul, ol { list-style: none; }
 .flex-wrap { flex-wrap: wrap; }
 .w-full { width: 100%; }
 .hidden { display: none; }
+
+/* Safari-safe spacing (no flexbox gap) */
+.countdown-row > * { margin: 0 0.75rem; }
+.transfer-filter {
+  display: flex;
+}
+.transfer-filter > * + * { margin-left: 0.5rem; }
+.transfer-filter > input { flex: 1; }
 
 @media (max-width: 767px) {
   .hide-mobile { display: none !important; }

@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
 import RaceCountdown from '../components/race/RaceCountdown';
+import { parseRaceDateTime } from '../utils/date';
 
 function getConstructors(driversList: F1Driver[]) {
   const set = new Set<string>();
@@ -216,9 +217,10 @@ export default function WeeklyPicksPage() {
       <Card title={nextRace.race_name}>
         <RaceCountdown
           targetDate={
-            nextRace.quali_date
-              ? `${nextRace.quali_date}${nextRace.quali_time ? 'T' + nextRace.quali_time : ''}`
-              : nextRace.race_date
+            parseRaceDateTime(
+              nextRace.quali_date || nextRace.race_date,
+              nextRace.quali_time
+            ).toISOString()
           }
           label="Picks lock in"
         />
