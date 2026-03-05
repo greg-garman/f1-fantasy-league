@@ -6,7 +6,12 @@ export async function isPicksLocked(raceId: number): Promise<boolean> {
   const race = await queryOne<F1Race>('SELECT * FROM f1_races WHERE id = $1', [raceId]);
   if (!race) return true; // If race not found, treat as locked
 
+  // If picks_locked is explicitly 1, it's locked
   if (race.picks_locked === 1) return true;
+
+  // If picks_locked is 0 and status is 'upcoming', trust the DB value
+  // (admin may have manually unlocked it)
+  if (race.picks_locked === 0 && race.status === 'upcoming') return false;
 
   // Check if qualifying has started
   if (race.quali_date && race.quali_time) {
@@ -15,7 +20,6 @@ export async function isPicksLocked(raceId: number): Promise<boolean> {
       return true;
     }
   } else if (race.quali_date) {
-    // If no time specified, lock at start of qualifying day
     const qualiDatetime = new Date(`${race.quali_date}T00:00:00Z`);
     if (Date.now() >= qualiDatetime.getTime()) {
       return true;

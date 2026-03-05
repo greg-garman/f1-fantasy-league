@@ -188,6 +188,10 @@ export function syncSeason() {
   return post<{ message: string }>('/admin/sync-season');
 }
 
+export function unlockRace(raceId: number) {
+  return post<{ message: string }>(`/admin/unlock-race/${raceId}`);
+}
+
 export function syncRace(raceId: number) {
   return post<{ message: string }>(`/admin/sync-race/${raceId}`);
 }
@@ -225,6 +229,10 @@ export function generateInvite() {
   return post<{ inviteCode: string }>('/admin/invite').then(r => ({ invite_code: r.inviteCode }));
 }
 
+export function resetPassword(userId: number, newPassword: string) {
+  return post<{ message: string }>('/admin/reset-password', { userId, newPassword });
+}
+
 /* default namespace export */
 const api = {
   login,
@@ -250,6 +258,7 @@ const api = {
   getStandingsByRace,
   getSettings,
   syncSeason,
+  unlockRace,
   syncRace,
   scoreRace,
   adjustScore,

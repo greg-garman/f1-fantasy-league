@@ -52,12 +52,23 @@ export default function DashboardPage() {
       <h1 className="page__title">Dashboard</h1>
 
       <div className="dashboard-grid">
-        {/* Next Race Countdown */}
+        {/* Next Race Countdowns */}
         {nextRace && (
           <Card title={nextRace.race_name} className="dashboard-grid__full">
             <p className="text-gray mb-1" style={{ fontSize: '0.8125rem' }}>
               {nextRace.circuit_name} &middot; {nextRace.country || ''}
             </p>
+            {nextRace.quali_date && (
+              <RaceCountdown
+                targetDate={
+                  nextRace.quali_time
+                    ? `${nextRace.quali_date}T${nextRace.quali_time}`
+                    : nextRace.quali_date
+                }
+                label="Qualifying (picks lock)"
+              />
+            )}
+            <div style={{ marginTop: '0.75rem' }} />
             <RaceCountdown
               targetDate={
                 nextRace.race_time

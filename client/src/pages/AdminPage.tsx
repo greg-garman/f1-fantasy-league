@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   syncSeason,
+  unlockRace,
   syncRace,
   scoreRace,
   adjustScore,
   setMatchups as apiSetMatchups,
   updateSettings,
   generateInvite,
+  resetPassword,
   getRaces,
   getStandings,
   getDrivers,
@@ -50,6 +52,8 @@ export default function AdminPage() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncRaceId, setSyncRaceId] = useState('');
   const [syncingOne, setSyncingOne] = useState(false);
+  const [unlockRaceId, setUnlockRaceId] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
 
   const handleSyncSeason = async () => {
     setSyncingAll(true);
@@ -62,6 +66,13 @@ export default function AdminPage() {
     setSyncingOne(true);
     try { const r = await syncRace(Number(syncRaceId)); showMsg(r.message); } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Sync failed'); }
     setSyncingOne(false);
+  };
+
+  const handleUnlockRace = async () => {
+    if (!unlockRaceId) return;
+    setUnlocking(true);
+    try { const r = await unlockRace(Number(unlockRaceId)); showMsg(r.message); } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Unlock failed'); }
+    setUnlocking(false);
   };
 
   /* Score */
@@ -122,6 +133,22 @@ export default function AdminPage() {
     setSavingSettings(false);
   };
 
+  /* Password Reset */
+  const [resetUserId, setResetUserId] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!resetUserId || !resetNewPassword) return;
+    setResetting(true);
+    try {
+      const r = await resetPassword(Number(resetUserId), resetNewPassword);
+      showMsg(r.message);
+      setResetNewPassword('');
+    } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Reset failed'); }
+    setResetting(false);
+  };
+
   const handleGenerateInvite = async () => {
     try {
       const r = await generateInvite();
@@ -175,6 +202,15 @@ export default function AdminPage() {
               {raceSelect(syncRaceId, setSyncRaceId)}
               <Button variant="secondary" size="small" disabled={syncingOne || !syncRaceId} onClick={handleSyncRace}>
                 {syncingOne ? 'Syncing...' : 'Sync Race'}
+              </Button>
+            </div>
+          </div>
+          <div className="admin-section">
+            <div className="admin-section__title">Unlock Race Picks</div>
+            <div className="flex gap-1 items-center">
+              {raceSelect(unlockRaceId, setUnlockRaceId)}
+              <Button variant="danger" size="small" disabled={unlocking || !unlockRaceId} onClick={handleUnlockRace}>
+                {unlocking ? 'Unlocking...' : 'Unlock Picks'}
               </Button>
             </div>
           </div>
@@ -272,6 +308,27 @@ export default function AdminPage() {
                 {inviteCode}
               </p>
             )}
+          </Card>
+
+          <Card title="Reset User Password">
+            <div className="flex flex-wrap gap-1 items-center">
+              <select value={resetUserId} onChange={(e) => setResetUserId(e.target.value)} style={{ flex: 1, padding: '0.4rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.875rem' }}>
+                <option value="">Select player...</option>
+                {standings.map((s) => (
+                  <option key={s.user_id} value={s.user_id}>{s.display_name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="New password"
+                value={resetNewPassword}
+                onChange={(e) => setResetNewPassword(e.target.value)}
+                style={{ flex: 1, padding: '0.4rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
+              <Button variant="danger" size="small" disabled={resetting || !resetUserId || !resetNewPassword} onClick={handleResetPassword}>
+                {resetting ? '...' : 'Reset Password'}
+              </Button>
+            </div>
           </Card>
         </>
       )}
