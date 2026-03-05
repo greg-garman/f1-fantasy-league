@@ -6,6 +6,7 @@ import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 import { syncRaceResults, syncSeasonData } from '../services/f1DataSync.js';
 import { scoreRace } from '../services/scoring.js';
 import { updatePrices } from '../services/priceEngine.js';
+import { seedDrivers2026 } from '../services/seedDrivers.js';
 
 const router = Router();
 
@@ -185,6 +186,16 @@ router.post('/invite', async (_req: Request, res: Response): Promise<void> => {
   await execute("UPDATE league_settings SET value = $1 WHERE key = 'invite_code'", [code]);
 
   res.json({ ok: true, inviteCode: code });
+});
+
+// POST /seed-drivers — seed 2026 drivers with official F1 Fantasy prices
+router.post('/seed-drivers', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await seedDrivers2026();
+    res.json({ ok: true, message: `Drivers seeded: ${result.inserted} inserted, ${result.updated} updated` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? 'Failed to seed drivers' });
+  }
 });
 
 // POST /reset-password — admin resets a user's password

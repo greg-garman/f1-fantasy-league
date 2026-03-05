@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   syncSeason,
+  seedDrivers,
   unlockRace,
   syncRace,
   scoreRace,
@@ -55,10 +56,18 @@ export default function AdminPage() {
   const [unlockRaceId, setUnlockRaceId] = useState('');
   const [unlocking, setUnlocking] = useState(false);
 
+  const [seeding, setSeeding] = useState(false);
+
   const handleSyncSeason = async () => {
     setSyncingAll(true);
     try { const r = await syncSeason(); showMsg(r.message); } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Sync failed'); }
     setSyncingAll(false);
+  };
+
+  const handleSeedDrivers = async () => {
+    setSeeding(true);
+    try { const r = await seedDrivers(); showMsg(r.message); } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Seed failed'); }
+    setSeeding(false);
   };
 
   const handleSyncRace = async () => {
@@ -194,6 +203,13 @@ export default function AdminPage() {
             <div className="admin-section__title">Sync Season Data</div>
             <Button variant="primary" disabled={syncingAll} onClick={handleSyncSeason}>
               {syncingAll ? 'Syncing...' : 'Sync Full Season'}
+            </Button>
+          </div>
+          <div className="admin-section">
+            <div className="admin-section__title">Seed 2026 Drivers</div>
+            <p className="text-gray mb-1" style={{ fontSize: '0.8125rem' }}>Load the official 2026 F1 Fantasy driver list with correct prices. This will replace all existing driver data.</p>
+            <Button variant="danger" disabled={seeding} onClick={handleSeedDrivers}>
+              {seeding ? 'Seeding...' : 'Seed 2026 Drivers'}
             </Button>
           </div>
           <div className="admin-section">
