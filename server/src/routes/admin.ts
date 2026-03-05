@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { query, queryOne, execute, executeReturning, transaction } from '../db/connection.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 import { syncRaceResults, syncSeasonData } from '../services/f1DataSync.js';
@@ -165,6 +166,32 @@ router.post('/invite', async (_req: Request, res: Response): Promise<void> => {
   await execute("UPDATE league_settings SET value = $1 WHERE key = 'invite_code'", [code]);
 
   res.json({ ok: true, inviteCode: code });
+});
+
+// POST /reset-password — admin resets a user's password
+router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  const { userId, newPassword } = req.body;
+
+  if (!userId || !newPassword) {
+    res.status(400).json({ error: 'userId and newPassword required' });
+    return;
+  }
+
+  if (newPassword.length < 4) {
+    res.status(400).json({ error: 'Password must be at least 4 characters' });
+    return;
+  }
+
+  const user = await queryOne<{ id: number }>('SELECT id FROM users WHERE id = $1', [userId]);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const passwordHash = bcrypt.hashSync(newPassword, 10);
+  await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+
+  res.json({ ok: true, message: 'Password reset successfully' });
 });
 
 export default router;

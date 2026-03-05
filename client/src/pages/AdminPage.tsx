@@ -7,6 +7,7 @@ import {
   setMatchups as apiSetMatchups,
   updateSettings,
   generateInvite,
+  resetPassword,
   getRaces,
   getStandings,
   getDrivers,
@@ -120,6 +121,22 @@ export default function AdminPage() {
       showMsg('Settings updated');
     } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Save failed'); }
     setSavingSettings(false);
+  };
+
+  /* Password Reset */
+  const [resetUserId, setResetUserId] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!resetUserId || !resetNewPassword) return;
+    setResetting(true);
+    try {
+      const r = await resetPassword(Number(resetUserId), resetNewPassword);
+      showMsg(r.message);
+      setResetNewPassword('');
+    } catch (e: unknown) { showErr(e instanceof Error ? e.message : 'Reset failed'); }
+    setResetting(false);
   };
 
   const handleGenerateInvite = async () => {
@@ -272,6 +289,27 @@ export default function AdminPage() {
                 {inviteCode}
               </p>
             )}
+          </Card>
+
+          <Card title="Reset User Password">
+            <div className="flex flex-wrap gap-1 items-center">
+              <select value={resetUserId} onChange={(e) => setResetUserId(e.target.value)} style={{ flex: 1, padding: '0.4rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.875rem' }}>
+                <option value="">Select player...</option>
+                {standings.map((s) => (
+                  <option key={s.user_id} value={s.user_id}>{s.display_name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="New password"
+                value={resetNewPassword}
+                onChange={(e) => setResetNewPassword(e.target.value)}
+                style={{ flex: 1, padding: '0.4rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
+              <Button variant="danger" size="small" disabled={resetting || !resetUserId || !resetNewPassword} onClick={handleResetPassword}>
+                {resetting ? '...' : 'Reset Password'}
+              </Button>
+            </div>
           </Card>
         </>
       )}

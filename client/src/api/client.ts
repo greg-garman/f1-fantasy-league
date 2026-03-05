@@ -225,6 +225,10 @@ export function generateInvite() {
   return post<{ inviteCode: string }>('/admin/invite').then(r => ({ invite_code: r.inviteCode }));
 }
 
+export function resetPassword(userId: number, newPassword: string) {
+  return post<{ message: string }>('/admin/reset-password', { userId, newPassword });
+}
+
 /* default namespace export */
 const api = {
   login,
