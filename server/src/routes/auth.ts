@@ -58,6 +58,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   });
 
   res.json({
+    token: sessionId,
     user: {
       id: inserted.id,
       username,
@@ -94,6 +95,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   });
 
   res.json({
+    token: sessionId,
     user: {
       id: user.id,
       username: user.username,
