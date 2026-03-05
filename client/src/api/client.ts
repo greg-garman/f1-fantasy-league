@@ -157,7 +157,26 @@ export function submitPicks(
   raceId: number,
   picksList: Array<{ pick_type: string; pick_value: string }>,
 ) {
-  return post<{ picks: WeeklyPick[] }>('/picks', { race_id: raceId, picks: picksList }).then(r => r.picks);
+  // Transform array format into the named fields the server expects
+  const body: Record<string, any> = {};
+  const podiumValues: string[] = [];
+  const constructorPodiumValues: string[] = [];
+
+  for (const p of picksList) {
+    switch (p.pick_type) {
+      case 'pole': body.pole = p.pick_value; break;
+      case 'winner': body.winner = p.pick_value; break;
+      case 'fastest_lap': body.fastestLap = p.pick_value; break;
+      case 'dnf': body.dnf = p.pick_value; break;
+      case 'podium': podiumValues.push(p.pick_value); break;
+      case 'constructor_podium': constructorPodiumValues.push(p.pick_value); break;
+      case 'h2h': body.h2h = p.pick_value; break;
+    }
+  }
+  if (podiumValues.length > 0) body.podium = podiumValues;
+  if (constructorPodiumValues.length > 0) body.constructorPodium = constructorPodiumValues;
+
+  return post<{ picks: WeeklyPick[] }>(`/picks/${raceId}`, body).then(r => r.picks);
 }
 
 export function getMyPicks(raceId: number) {
