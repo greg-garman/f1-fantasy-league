@@ -223,6 +223,7 @@ export default function WeeklyPicksPage() {
             ).toISOString()
           }
           label="Picks lock in"
+          raceStatus={nextRace.status}
         />
       </Card>
 

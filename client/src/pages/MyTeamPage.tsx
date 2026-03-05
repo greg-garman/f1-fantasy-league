@@ -114,7 +114,9 @@ export default function MyTeamPage() {
 
       {remaining !== null && remaining >= 0 && (
         <p className="text-gray mb-2" style={{ fontSize: '0.8125rem' }}>
-          Transfers remaining this race: <strong>{remaining}</strong>
+          {remaining >= 999
+            ? 'Unlimited transfers until qualifying starts'
+            : <>Transfers remaining this race: <strong>{remaining}</strong></>}
         </p>
       )}
 

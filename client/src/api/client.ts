@@ -100,7 +100,7 @@ export function getDriver(id: number) {
 /* ------------------------------------------------------------------ */
 
 export function getRaces() {
-  return get<{ races: F1Race[] }>('/races').then(r => r.races);
+  return get<{ races: F1Race[] }>('/races').then(r => r.races ?? []);
 }
 
 export function getNextRace() {

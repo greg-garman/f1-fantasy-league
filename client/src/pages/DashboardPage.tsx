@@ -147,12 +147,23 @@ export default function DashboardPage() {
         ]);
         if (cancelled) return;
         setNextRace(nr);
-        setAllRaces(races);
+        setAllRaces(races || []);
         setLeaderboard(st);
 
         if (nr) {
           const p = await getMyPicks(nr.id).catch(() => []);
           if (!cancelled) setMyPicks(p);
+        }
+
+        // If races came back empty (server cold start timing), retry once
+        if ((!races || races.length === 0) && nr) {
+          setTimeout(async () => {
+            if (cancelled) return;
+            const retryRaces = await getRaces().catch(() => []);
+            if (!cancelled && retryRaces && retryRaces.length > 0) {
+              setAllRaces(retryRaces);
+            }
+          }, 2000);
         }
       } catch {
         /* ignore */
@@ -185,11 +196,13 @@ export default function DashboardPage() {
                 <RaceCountdown
                   targetDate={parseRaceDateTime(nextRace.quali_date, nextRace.quali_time).toISOString()}
                   label="Qualifying (picks lock)"
+                  raceStatus={nextRace.status}
                 />
               )}
               <RaceCountdown
                 targetDate={parseRaceDateTime(nextRace.race_date, nextRace.race_time).toISOString()}
                 label="Race starts in"
+                raceStatus={nextRace.status}
               />
             </div>
           </Card>

@@ -53,7 +53,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await apiLogout();
+    try {
+      await apiLogout();
+    } catch {
+      // Clear local state even if the server call fails (e.g. Safari cookie issues)
+    }
     setUser(null);
   }, []);
 
