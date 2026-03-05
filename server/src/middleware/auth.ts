@@ -13,7 +13,11 @@ declare global {
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const sessionId = req.cookies?.session_id;
+    // Accept session from Authorization header (token-based) or cookie
+    const authHeader = req.headers.authorization;
+    const sessionId = (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null)
+      || req.cookies?.session_id;
+
     if (!sessionId) {
       res.status(401).json({ error: 'Not authenticated' });
       return;

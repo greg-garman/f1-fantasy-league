@@ -12,6 +12,19 @@ import type {
 } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const TOKEN_KEY = 'f1_session_token';
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearStoredToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Fetch wrapper                                                      */
@@ -21,10 +34,12 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getStoredToken();
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string>),
     },
     ...options,
@@ -66,21 +81,26 @@ function del<T>(path: string) {
 /*  Auth                                                               */
 /* ------------------------------------------------------------------ */
 
-export function login(username: string, password: string) {
-  return post<{ user: User }>('/auth/login', { username, password });
+export async function login(username: string, password: string) {
+  const data = await post<{ token: string; user: User }>('/auth/login', { username, password });
+  setStoredToken(data.token);
+  return data;
 }
 
-export function register(username: string, password: string, displayName: string, inviteCode: string) {
-  return post<{ user: User }>('/auth/register', {
+export async function register(username: string, password: string, displayName: string, inviteCode: string) {
+  const data = await post<{ token: string; user: User }>('/auth/register', {
     username,
     password,
     displayName,
     inviteCode,
   });
+  setStoredToken(data.token);
+  return data;
 }
 
-export function logout() {
-  return post<void>('/auth/logout');
+export async function logout() {
+  await post<void>('/auth/logout').catch(() => {});
+  clearStoredToken();
 }
 
 export function getMe() {

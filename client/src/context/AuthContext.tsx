@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
-import { getMe, login as apiLogin, register as apiRegister, logout as apiLogout } from '../api/client';
+import { getMe, login as apiLogin, register as apiRegister, logout as apiLogout, clearStoredToken } from '../api/client';
 
 interface AuthState {
   user: User | null;
@@ -21,7 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     getMe()
       .then((data) => setUser(data.user))
-      .catch(() => setUser(null))
+      .catch(() => {
+        clearStoredToken();
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -53,11 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    try {
-      await apiLogout();
-    } catch {
-      // Clear local state even if the server call fails (e.g. Safari cookie issues)
-    }
+    await apiLogout(); // clears token internally, catches its own errors
     setUser(null);
   }, []);
 
