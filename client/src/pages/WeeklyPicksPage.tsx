@@ -60,10 +60,12 @@ export default function WeeklyPicksPage() {
             if (p.pick_type === 'fastest_lap') setFastestLap(p.pick_value);
             if (p.pick_type === 'dnf') setDnf(p.pick_value);
             if (p.pick_type === 'podium') {
-              setPodium((prev) => [...prev, p.pick_value]);
+              try { const arr = JSON.parse(p.pick_value); setPodium(Array.isArray(arr) ? arr : [p.pick_value]); }
+              catch { setPodium([p.pick_value]); }
             }
             if (p.pick_type === 'constructor_podium') {
-              setConstructorPodium((prev) => [...prev, p.pick_value]);
+              try { const arr = JSON.parse(p.pick_value); setConstructorPodium(Array.isArray(arr) ? arr : [p.pick_value]); }
+              catch { setConstructorPodium([p.pick_value]); }
             }
             if (p.pick_type === 'h2h') setH2hPick(p.pick_value);
           });
@@ -88,11 +90,11 @@ export default function WeeklyPicksPage() {
     });
   };
 
-  const toggleConstructorPodium = (name: string) => {
+  const setConstructorPodiumSlot = (index: number, value: string) => {
     setConstructorPodium((prev) => {
-      if (prev.includes(name)) return prev.filter((n) => n !== name);
-      if (prev.length >= 3) return prev;
-      return [...prev, name];
+      const next = [...prev];
+      next[index] = value;
+      return next;
     });
   };
 
@@ -109,7 +111,8 @@ export default function WeeklyPicksPage() {
     if (fastestLap) picksList.push({ pick_type: 'fastest_lap', pick_value: fastestLap });
     if (dnf) picksList.push({ pick_type: 'dnf', pick_value: dnf });
     podium.forEach((id) => picksList.push({ pick_type: 'podium', pick_value: id }));
-    constructorPodium.forEach((c) => picksList.push({ pick_type: 'constructor_podium', pick_value: c }));
+    const filteredConstructorPodium = constructorPodium.filter(Boolean);
+    filteredConstructorPodium.forEach((c) => picksList.push({ pick_type: 'constructor_podium', pick_value: c }));
     if (h2hPick) picksList.push({ pick_type: 'h2h', pick_value: h2hPick });
 
     try {
@@ -176,7 +179,7 @@ export default function WeeklyPicksPage() {
             <div className="pick-locked__icon">&#128274;</div>
             <p className="pick-locked__text">Picks are locked</p>
             <p className="text-gray mt-1" style={{ fontSize: '0.875rem' }}>
-              Picks locked at qualifying time. Check back after the race for results.
+              Picks locked at race start. Check back after the race for results.
             </p>
           </div>
           {existingPicks.length > 0 && (
@@ -218,11 +221,11 @@ export default function WeeklyPicksPage() {
         <RaceCountdown
           targetDate={
             parseRaceDateTime(
-              nextRace.quali_date || nextRace.race_date,
-              nextRace.quali_time
+              nextRace.race_date,
+              nextRace.race_time
             ).toISOString()
           }
-          label="Picks lock in"
+          label="Picks lock at race start"
           raceStatus={nextRace.status}
         />
       </Card>
@@ -241,6 +244,40 @@ export default function WeeklyPicksPage() {
         >
           {success}
         </div>
+      )}
+
+      {existingPicks.length > 0 && (
+        <Card title="Your Current Picks">
+          {existingPicks.map((p) => {
+            let displayValue = p.pick_value;
+            // Try to parse JSON arrays (podium, constructor_podium)
+            try {
+              const arr = JSON.parse(p.pick_value);
+              if (Array.isArray(arr)) {
+                displayValue = arr
+                  .map((v: string) => {
+                    const driver = driversList.find((d) => d.driver_id === v);
+                    return driver ? `${driver.first_name} ${driver.last_name}` : v;
+                  })
+                  .join(', ');
+              }
+            } catch {
+              // Not JSON — try to resolve as driver_id
+              const driver = driversList.find((d) => d.driver_id === p.pick_value);
+              if (driver) displayValue = `${driver.first_name} ${driver.last_name}`;
+            }
+            return (
+              <p key={p.id} className="text-gray" style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                <span className="font-semibold text-navy" style={{ textTransform: 'capitalize' }}>
+                  {p.pick_type.replace(/_/g, ' ')}
+                </span>: {displayValue}
+              </p>
+            );
+          })}
+          <p className="text-gray mt-1" style={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
+            You can update your picks below until race start.
+          </p>
+        </Card>
       )}
 
       <Card title="Race Predictions">
@@ -271,23 +308,23 @@ export default function WeeklyPicksPage() {
       </Card>
 
       <Card title="Constructor Podium (Pick 3)">
-        <div className="podium-select">
-          {constructors.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`podium-select__chip ${constructorPodium.includes(c) ? 'podium-select__chip--selected' : ''}`}
-              onClick={() => toggleConstructorPodium(c)}
+        <p className="text-gray mb-1" style={{ fontSize: '0.8125rem' }}>
+          Pick the 3 constructors on the podium. You can pick the same team multiple times.
+        </p>
+        {[0, 1, 2].map((i) => (
+          <div className="pick-group" key={i}>
+            <div className="pick-group__label">Position {i + 1}</div>
+            <select
+              value={constructorPodium[i] || ''}
+              onChange={(e) => setConstructorPodiumSlot(i, e.target.value)}
             >
-              {c}
-            </button>
-          ))}
-        </div>
-        {constructorPodium.length > 0 && (
-          <p className="text-gray mt-1" style={{ fontSize: '0.8125rem' }}>
-            Selected: {constructorPodium.join(', ')} ({constructorPodium.length}/3)
-          </p>
-        )}
+              <option value="">-- Select --</option>
+              {constructors.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        ))}
       </Card>
 
       {/* H2H Matchups */}

@@ -26,12 +26,10 @@ export async function isPicksLocked(raceId: number): Promise<boolean> {
   // (admin may have manually unlocked it)
   if (race.picks_locked === 0 && race.status === 'upcoming') return false;
 
-  // Check if qualifying has started (using UTC-safe parsing)
-  if (race.quali_date) {
-    const qualiDatetime = parseRaceDateTime(race.quali_date, race.quali_time);
-    if (Date.now() >= qualiDatetime.getTime()) {
-      return true;
-    }
+  // Check if race has started (using UTC-safe parsing)
+  const raceDatetime = parseRaceDateTime(race.race_date, race.race_time);
+  if (Date.now() >= raceDatetime.getTime()) {
+    return true;
   }
 
   return false;
@@ -55,12 +53,10 @@ export async function lockPicksIfNeeded(): Promise<void> {
   `, [config.seasonYear]);
 
   for (const race of upcomingRaces) {
-    if (race.quali_date) {
-      const qualiDatetime = parseRaceDateTime(race.quali_date, race.quali_time);
-      if (Date.now() >= qualiDatetime.getTime()) {
-        await execute('UPDATE f1_races SET picks_locked = 1 WHERE id = $1', [race.id]);
-        console.log(`Locked picks for race ${race.id} (${race.race_name})`);
-      }
+    const raceDatetime = parseRaceDateTime(race.race_date, race.race_time);
+    if (Date.now() >= raceDatetime.getTime()) {
+      await execute('UPDATE f1_races SET picks_locked = 1 WHERE id = $1', [race.id]);
+      console.log(`Locked picks for race ${race.id} (${race.race_name})`);
     }
   }
 }
