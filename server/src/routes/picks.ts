@@ -62,7 +62,12 @@ router.post('/:raceId', async (req: Request, res: Response): Promise<void> => {
       if (h2h && typeof h2h === 'object') {
         await client.query(upsertSql, [userId, raceId, 'h2h', JSON.stringify(h2h)]);
       }
-      if (constructorPodium) {
+      if (constructorPodium && Array.isArray(constructorPodium)) {
+        if (constructorPodium.length > 3) {
+          throw new Error('Maximum 3 constructor podium picks allowed');
+        }
+        await client.query(upsertSql, [userId, raceId, 'constructor_podium', JSON.stringify(constructorPodium)]);
+      } else if (constructorPodium) {
         await client.query(upsertSql, [userId, raceId, 'constructor_podium', constructorPodium]);
       }
     });
