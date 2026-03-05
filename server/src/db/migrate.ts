@@ -1,23 +1,22 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db from './connection.js';
+import { pool } from './connection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(__dirname, 'migrations');
 
-export function runMigrations(): void {
-  db.exec(`
+export async function runMigrations(): Promise<void> {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS _migrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
-      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
-  const applied = new Set(
-    db.prepare('SELECT name FROM _migrations').all().map((r: any) => r.name)
-  );
+  const { rows } = await pool.query('SELECT name FROM _migrations');
+  const applied = new Set(rows.map((r: any) => r.name));
 
   const files = fs.readdirSync(migrationsDir)
     .filter(f => f.endsWith('.sql'))
@@ -26,13 +25,18 @@ export function runMigrations(): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
-    db.exec(sql);
-    db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+    await pool.query(sql);
+    await pool.query('INSERT INTO _migrations (name) VALUES ($1)', [file]);
     console.log(`Migration applied: ${file}`);
   }
 }
 
 if (process.argv[1] && process.argv[1].includes('migrate')) {
-  runMigrations();
-  console.log('All migrations complete.');
+  runMigrations().then(() => {
+    console.log('All migrations complete.');
+    process.exit(0);
+  }).catch(err => {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  });
 }

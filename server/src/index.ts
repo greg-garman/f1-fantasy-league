@@ -34,14 +34,16 @@ app.get('/api/health', (_req, res) => {
 
 app.use(errorHandler);
 
-runMigrations();
+(async () => {
+  await runMigrations();
 
-syncSeasonData().catch(err => console.error('Initial sync failed:', err));
+  syncSeasonData().catch(err => console.error('Initial sync failed:', err));
 
-initScheduler();
+  initScheduler();
 
-app.listen(config.port, () => {
-  console.log(`F1 Fantasy server running on port ${config.port}`);
-});
+  app.listen(config.port, () => {
+    console.log(`F1 Fantasy server running on port ${config.port}`);
+  });
+})();
 
 export default app;
